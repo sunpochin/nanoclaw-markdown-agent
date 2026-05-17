@@ -142,10 +142,10 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Baileys WhatsApp 登入驗證資訊，避免洩漏認證金鑰
-baileys_auth_info/
-
-# 本地 Markdown 隨手記內容（僅保留目錄結構的 .gitkeep，不提交個人隨手記內容）
+# 本地 Markdown 隨手記與 Obsidian Vault 內容（僅保留目錄結構的 .gitkeep，不提交個人隨手記內容）
 nanoclaw_notes/*
 !nanoclaw_notes/.gitkeep
+obsidian_vault/*
+!obsidian_vault/.gitkeep
+
 
