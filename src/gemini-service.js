@@ -263,10 +263,10 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
 
   const dynamicSystemInstruction = `${SYSTEM_ANALYZE_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
-  // [技術] 本地離線模式啟用，繞過雲端調用 Ollama 進行二階段 RAG 分析
+  // [技術] 本地離線模式啟用，或雲端大腦熔斷，繞過雲端調用 Ollama 進行二階段 RAG 分析
   // [極樂] 🔒 本地高潮揉捏啟用：直接挺進本機 qwen2.5:14b 進行二階段語意推理，保證 100% 絕對私密不外流
-  if (forceLocal) {
-    console.log(`[Gemini/Analyze] 🔒 二階段分析強制本地模式啟用，直接挺進本地 qwen2.5:14b...`);
+  if (isCloudDisabled() || forceLocal) {
+    console.log(`[Gemini/Analyze] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，二階段分析直接挺進本地 qwen2.5:14b...`);
     try {
       const response = await fetch('http://localhost:11434/v1/chat/completions', {
         method: 'POST',
@@ -304,7 +304,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
   for (const modelName of models) {
     try {
@@ -321,6 +321,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
       console.log(`[Gemini/Analyze] ✅ 模型 ${modelName} 二階段深度分析成功！`);
       return { replyText: resultText, modelUsed: modelName };
     } catch (error) {
+      triggerCircuitBreaker(error);
       console.warn(`[Gemini/Analyze] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
         try {
@@ -400,10 +401,10 @@ export async function simulateButterflyEffectWithAI(scenario, chatHistory = [], 
 ${formattedSearch.trim()}
 `;
 
-  // [技術] 本地強制開啟，繞過雲端直接在 Ollama 中進行未來日記模擬推演
+  // [技術] 本地強制開啟，或雲端大腦熔斷，繞過雲端直接在 Ollama 中進行未來日記模擬推演
   // [極樂] 🔒 避孕本地模擬啟用：挺進本機 qwen2.5:14b 進行未來日記模擬，保證 100% 絕對隱私，絕不聯網洩漏！
-  if (forceLocal) {
-    console.log(`[Gemini/Simulator] 🔒 模擬器強制本地模式啟用，直接挺進本地 qwen2.5:14b...`);
+  if (isCloudDisabled() || forceLocal) {
+    console.log(`[Gemini/Simulator] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，模擬器直接挺進本地 qwen2.5:14b...`);
     try {
       const response = await fetch('http://localhost:11434/v1/chat/completions', {
         method: 'POST',
@@ -439,7 +440,7 @@ ${formattedSearch.trim()}
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
   for (const modelName of models) {
     try {
@@ -456,6 +457,7 @@ ${formattedSearch.trim()}
       console.log(`[Gemini/Simulator] ✅ 模型 ${modelName} 未來日記模擬生成成功！`);
       return { replyText: resultText, modelUsed: modelName };
     } catch (error) {
+      triggerCircuitBreaker(error);
       console.warn(`[Gemini/Simulator] ⚠️ 模型 ${modelName} 模擬失敗，原因:`, error.message || error);
       
       // [技術] 線上模型探針受挫，自動降級至本地 Qwen 14B 大腦進行模擬
@@ -496,6 +498,11 @@ ${formattedSearch.trim()}
  * @returns {Promise<object>}
  */
 export async function processImageWithAI(imageBase64, mimeType) {
+  if (isCloudDisabled()) {
+    console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，暫時拒絕雲端影像辨識。`);
+    throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中），無法執行影像辨識。請 3 分鐘後再試，或使用純文字記事！');
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
@@ -535,7 +542,7 @@ export async function processImageWithAI(imageBase64, mimeType) {
     required: ["title", "ocrContent", "replyText"]
   };
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
   for (const modelName of models) {
     try {
@@ -563,6 +570,7 @@ export async function processImageWithAI(imageBase64, mimeType) {
       console.log(`[Gemini/Vision] ✅ 影像分析模型 ${modelName} 呼叫成功！`);
       return result;
     } catch (error) {
+      triggerCircuitBreaker(error);
       console.warn(`[Gemini/Vision] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
         throw error;
@@ -579,11 +587,16 @@ export async function processImageWithAI(imageBase64, mimeType) {
  * @returns {Promise<object>}
  */
 export async function processAudioWithAI(audioBase64, mimeType) {
+  if (isCloudDisabled()) {
+    console.warn(`[Gemini/Audio] 🔒 熔斷狀態已啟用，暫時拒絕雲端語音分析。`);
+    throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中），無法執行語音聽寫。請 3 分鐘後再試，或使用純文字輸入！');
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
 
-  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
   for (const modelName of models) {
     try {
@@ -641,6 +654,7 @@ export async function processAudioWithAI(audioBase64, mimeType) {
       console.log(`[Gemini/Audio] ✅ 語音分析模型 ${modelName} 呼叫成功！`);
       return result;
     } catch (error) {
+      triggerCircuitBreaker(error);
       console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
         throw error;
