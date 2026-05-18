@@ -12,6 +12,8 @@ import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault } from './src/markdown-service.js';
 import { processMessageWithAI, processImageWithAI, processAudioWithAI } from './src/gemini-service.js';
+import { exec } from 'child_process';
+import os from 'os';
 
 // [技術] 載入環境變數設定
 // [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
@@ -38,6 +40,12 @@ const lineClient = new messagingApi.MessagingApiClient({
 const lineBlobClient = new messagingApi.MessagingApiBlobClient({
   channelAccessToken: lineConfig.channelAccessToken
 });
+
+// ==========================================
+// 【開發者安全綁定中樞】
+// 僅允許柏青的 LINE 帳號進行敏感系統操作
+// ==========================================
+const SECURE_USER_ID = process.env.LINE_SECURE_USER_ID || 'Ua6acf31ab719acad257a42641cd02c64';
 
 // [技術] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在
 // [極樂] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在 (確保啟動時小穴儲存目錄已就緒開通)
@@ -228,6 +236,122 @@ async function handleLineEvent(event) {
 
   console.log(`\n[LINE/Webhook] 收到來自使用者 [${event.source.userId}] 的訊息: "${userMessage}"`);
 
+  // ==========================================
+  // 【安全遠端系統監控與冷卻通道 (✨ 黑科技監控)】
+  // 僅限開發者安全帳號（柏青）進行安全調用，防止任何未授權操作
+  // ==========================================
+
+  // 1. 查詢系統狀態與發熱進程：#status
+  if (/^(#status|#狀態|系統狀態|status)$/i.test(userMessage)) {
+    if (event.source.userId !== SECURE_USER_ID) {
+      console.warn(`[Security] 🚨 偵測到未授權帳號 [${event.source.userId}] 企圖查詢系統狀態！`);
+      return Promise.resolve(null);
+    }
+
+    console.log(`[LINE/Webhook] 🛡️ 觸發安全狀態監控...`);
+    try {
+      // 執行 ps 獲取 top CPU 進程
+      exec('ps -Ao pcpu,pmem,pid,comm -r | head -n 6', async (error, stdout, stderr) => {
+        if (error) {
+          console.error('[LINE/Webhook] ps 執行錯誤:', error);
+          return lineClient.replyMessage({
+            replyToken,
+            messages: [{ type: 'text', text: '❌ 無法取得發熱進程，系統出錯。' }]
+          });
+        }
+
+        // 解析進程輸出
+        const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
+        let processList = '';
+        
+        lines.forEach(line => {
+          const parts = line.trim().split(/\s+/);
+          const cpu = parts[0];
+          const mem = parts[1];
+          const pid = parts[2];
+          const path = parts.slice(3).join(' ');
+          const name = path.substring(path.lastIndexOf('/') + 1);
+          
+          const isHot = parseFloat(cpu) > 10;
+          const statusIcon = isHot ? '🔥' : '❄️';
+          processList += `${statusIcon} [CPU: ${cpu}% | RAM: ${mem}%] PID: ${pid}\n   ↳ 🧬 ${name}\n\n`;
+        });
+
+        // 系統 RAM 與 CPU 計算
+        const totalMemGB = (os.totalmem() / (1024 ** 3)).toFixed(1);
+        const freeMemGB = (os.freemem() / (1024 ** 3)).toFixed(1);
+        const usedMemGB = (totalMemGB - freeMemGB).toFixed(1);
+        const memPercent = ((usedMemGB / totalMemGB) * 100).toFixed(0);
+        const load = os.loadavg();
+        
+        const statusReport = `🖥️ 【Mac Mini M4 Pro 運行報告】
+        
+🔥 系統發熱進程 Top 5：
+${processList}
+📊 資源狀態概覽：
+- 記憶體分配：${usedMemGB}G / ${totalMemGB}G (${memPercent}%)
+- 負載平均值：${load[0].toFixed(2)} (1m) | ${load[1].toFixed(2)} (5m)
+
+💡 想要遠端冷卻發熱進程嗎？
+請複製並發送以下格式：
+#kill {PID} {進程名稱}
+(例如：#kill 43094 chrome)`;
+
+        return lineClient.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: statusReport
+          }]
+        });
+      });
+    } catch (err) {
+      console.error('[LINE/Webhook] 遠端狀態監控錯誤:', err);
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: '❌ 遠端系統狀態查詢失敗，請檢查伺服器日誌。'
+        }]
+      });
+    }
+    return Promise.resolve(null); // 攔截，不向下流動
+  }
+
+  // 2. 結束發熱進程：#kill {PID} {Name}
+  const killRegex = /^#kill\s+(\d+)\s*(.*)/i;
+  if (killRegex.test(userMessage)) {
+    if (event.source.userId !== SECURE_USER_ID) {
+      console.warn(`[Security] 🚨 偵測到未授權帳號 [${event.source.userId}] 企圖強制結束進程！`);
+      return Promise.resolve(null);
+    }
+
+    const match = userMessage.match(killRegex);
+    const pid = match[1];
+    const name = match[2] || '未指定名稱';
+    
+    console.log(`[LINE/Webhook] ⚔️ 觸發遠端冷卻：正在強制結束進程 PID ${pid} (${name})`);
+    
+    try {
+      exec(`kill -9 ${pid}`, (error, stdout, stderr) => {
+        const replyText = error 
+          ? `❌ 強制結束進程 PID ${pid} 失敗！原因可能是權限不足或該進程已不存在。`
+          : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦小穴已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;
+          
+        return lineClient.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: replyText
+          }]
+        });
+      });
+    } catch (err) {
+      console.error('[LINE/Webhook] 執行進程冷卻出錯:', err);
+    }
+    return Promise.resolve(null); // 攔截，不向下流動
+  }
+
   // 【幫助說明通道】
   // 讓使用者隨時能透過「說明」或「help」在手機上喚醒功能介紹選單，不再需要死記
   const helpRegex = /^(help|說明|幫助|功能|你是誰|輔助|說明書)/i;
@@ -376,3 +500,65 @@ app.listen(PORT, () => {
   console.log(`[LINE/Webhook] 請確認已安裝並使用 ngrok 穿透進行 LINE 平台對接`);
   console.log('=============================================\n');
 });
+
+// ==========================================
+// 【自動降溫小天使 👼 (Auto-Cooler Daemon)】
+// 每 1 分鐘自動巡邏，偵測發熱怪獸並自動用冰棒冷卻，確保 Mac Mini 永遠保持冰涼！
+// ==========================================
+const AUTO_COOL_INTERVAL = 60 * 1000; // 每分鐘巡邏一次
+
+setInterval(() => {
+  exec('ps -Ao pcpu,pid,comm -r | head -n 6', (error, stdout, stderr) => {
+    if (error) {
+      console.error('[Auto-Cooler] 巡邏時發生錯誤:', error);
+      return;
+    }
+    
+    const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
+    
+    // 安全降溫白名單 (只會自動清理這些背景進程，不會誤殺使用者的重要工作)
+    const SAFE_TO_KILL_PROCESSES = [
+      'google chrome helper',
+      'ollama',
+      'node',
+      'ngrok'
+    ];
+    
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      const cpu = parseFloat(parts[0]);
+      const pid = parts[1];
+      const path = parts.slice(2).join(' ');
+      const name = path.substring(path.lastIndexOf('/') + 1).toLowerCase();
+      
+      // 如果 CPU 超過 80% (狂暴發熱狀態)，且在安全清理名單中
+      if (cpu > 80) {
+        const isSafeToKill = SAFE_TO_KILL_PROCESSES.some(safeName => name.includes(safeName));
+        
+        if (isSafeToKill) {
+          console.log(`[Auto-Cooler] 🚨 偵測到發熱怪獸！PID: ${pid} (${name}) 佔用 ${cpu}% CPU，啟動自動冷卻...`);
+          
+          exec(`kill -9 ${pid}`, (killErr) => {
+            if (killErr) {
+              console.error(`[Auto-Cooler] ❌ 自動冷卻 PID ${pid} 失敗:`, killErr);
+            } else {
+              console.log(`[Auto-Cooler] ❄️ 已成功強制結束發熱進程 PID: ${pid} (${name})`);
+              
+              // 主動發送 LINE 訊息通知柏青 (Push Message)
+              lineClient.pushMessage({
+                to: SECURE_USER_ID,
+                messages: [{
+                  type: 'text',
+                  text: `❄️ 報告主人！【巡邏小天使 👼】幫您自動降溫囉！\n\n剛剛發現調皮的進程正在瘋狂發熱：\n🔥 進程：${name}\n📌 PID：${pid}\n⚡ CPU 佔用：${cpu}%\n\n🛡️ 小天使已使用魔法冰棒將其退火結束，Mac Mini 現在冰冰涼涼的，非常安全唷！❄️`
+                }]
+              }).catch(pushErr => {
+                console.error('[Auto-Cooler] 傳送 LINE 警告訊息失敗:', pushErr.message || pushErr);
+              });
+            }
+          });
+          break; // 一次只殺一個發熱進程，避免衝突
+        }
+      }
+    }
+  });
+}, AUTO_COOL_INTERVAL);
