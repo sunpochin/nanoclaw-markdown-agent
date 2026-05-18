@@ -152,6 +152,41 @@ async function handleLineEvent(event) {
 
   console.log(`\n[LINE/Webhook] 收到來自使用者 [${event.source.userId}] 的訊息: "${userMessage}"`);
 
+  // 【幫助說明通道】
+  // 讓使用者隨時能透過「說明」或「help」在手機上喚醒功能介紹選單，不再需要死記
+  const helpRegex = /^(help|說明|幫助|功能|你是誰|輔助|說明書)/i;
+  if (helpRegex.test(userMessage)) {
+    console.log(`[LINE/Webhook] ℹ️ 觸發說明通道：回覆幫助選單`);
+    return lineClient.replyMessage({
+      replyToken,
+      messages: [{
+        type: 'text',
+        text: `🤖 您好！我是您的 NanoClaw 隨身智慧秘書！
+
+以下是我目前為您服務的【三大核心通道】：
+
+1️⃣ ⚡【快速隨手記通道】
+   - 使用方式：開頭打「記：」或「記錄：」加上內容。
+   - 範例：『記：明天下午兩點要去拿快遞』
+   - 效果：不經過 AI，直接以 100% 精準度瞬移寫入您的 iCloud 筆記！
+
+2️⃣ 🧠【AI 智慧語意通道】
+   - 使用方式：直接用口語聊天，或請我幫您記帳、記錄生活。
+   - 記事範例：『幫我記一下今天晚餐吃火鍋花了450元』(自動幫您提取核心內容寫入筆記)
+   - 聊天範例：『請解釋 JavaScript 閉包』(自動切換為高智商知識對話模式)
+
+3️⃣ 📸【影像 OCR 結構化通道】
+   - 使用方式：直接對我「發送照片/截圖」。
+   - 範例：發送發票收據、手寫筆記本、會議白板、Duolingo 截圖。
+   - 效果：自動辨識並進行高精度 OCR，將收據排版成美麗的 Markdown 表格存入您的 iCloud 筆記中！
+
+💡 提示：
+- 筆記皆儲存在您個人 iCloud 的「nanoclaw_notes」資料夾中，絕對安全且跨裝置同步！
+- 忘記功能時，隨時對我輸入「說明」或「help」即可喚醒此選單喔！✨`
+      }]
+    });
+  }
+
   // 【第一通道：直覺快速通道】前綴匹配
   // 檢查是否以「記：」、「記錄：」、「memo:」等關鍵前綴開頭，若是則直接寫入，不經 AI 判斷以追求極速與 100% 準確率
   const prefixRegex = /^(記|記錄|記下來|memo|Memo)[:：]\s*(.+)/s;
