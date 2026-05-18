@@ -2,7 +2,7 @@ import express from 'express';
 import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes } from './src/markdown-service.js';
-import { processMessageWithAI } from './src/gemini-service.js';
+import { processMessageWithAI, processImageWithAI } from './src/gemini-service.js';
 
 // 載入環境變數設定
 dotenv.config();
@@ -18,6 +18,11 @@ const lineConfig = {
 
 // 初始化 LINE 訊息 API 客戶端
 const lineClient = new messagingApi.MessagingApiClient({
+  channelAccessToken: lineConfig.channelAccessToken
+});
+
+// 初始化 LINE 訊息 Blob 客戶端 (用於下載圖片)
+const lineBlobClient = new messagingApi.MessagingApiBlobClient({
   channelAccessToken: lineConfig.channelAccessToken
 });
 
@@ -86,13 +91,64 @@ app.get('/api/notes/:date', async (req, res) => {
  * @param {object} event - LINE 傳入的事件物件
  */
 async function handleLineEvent(event) {
-  // 僅處理「文字訊息」事件，其餘事件(如加入好友、貼圖等)安全跳過
-  if (event.type !== 'message' || event.message.type !== 'text') {
+  // 僅處理「訊息」事件
+  if (event.type !== 'message') {
+    return Promise.resolve(null);
+  }
+
+  const replyToken = event.replyToken;
+
+  // 【照片處理通道：OCR 影像分析與排版記錄】
+  if (event.message.type === 'image') {
+    const messageId = event.message.id;
+    console.log(`\n[LINE/Webhook] 📸 收到來自使用者 [${event.source.userId}] 的圖片訊息 (ID: ${messageId})`);
+
+    try {
+      // 1. 從 LINE 伺服器下載圖片的 Readable Stream
+      const stream = await lineBlobClient.getMessageContent(messageId);
+      
+      // 2. 將 Stream 讀取並轉換為 Buffer
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      const imageBuffer = Buffer.concat(chunks);
+      const imageBase64 = imageBuffer.toString('base64');
+      
+      // 3. 呼叫 Gemini 進行影像 OCR 與排版整理
+      const ocrResult = await processImageWithAI(imageBase64, 'image/jpeg');
+      console.log(`[LINE/Webhook] 📸 影像 OCR 分析完成: "${ocrResult.title}"`);
+      
+      // 4. 將排版好的 Markdown 內容寫入本地筆記
+      const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
+      await writeNoteToMarkdown(noteContent);
+      
+      // 5. 回覆使用者解析結果
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: ocrResult.replyText
+        }]
+      });
+    } catch (error) {
+      console.error('[LINE/Webhook] 處理圖片 OCR 發生錯誤:', error);
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: '❌ 抱歉，解析照片或進行 OCR 時發生錯誤，請稍後重試。'
+        }]
+      });
+    }
+  }
+
+  // 僅處理文字訊息，其他非文字/非圖片訊息安全跳過
+  if (event.message.type !== 'text') {
     return Promise.resolve(null);
   }
 
   const userMessage = event.message.text.trim();
-  const replyToken = event.replyToken;
 
   console.log(`\n[LINE/Webhook] 收到來自使用者 [${event.source.userId}] 的訊息: "${userMessage}"`);
 
