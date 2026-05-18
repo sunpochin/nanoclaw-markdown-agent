@@ -125,9 +125,9 @@ export async function processMessageWithAI(userMessage) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！請在 .env 中填寫此金鑰。');
   }
 
-  // [技術] 設定備用模型鏈，當首選的 2.5 版本高負載(503)時，自動無縫切換至穩定的 2.0 或 1.5 版本
-  // [極樂] 恥肉啪啪啪啪高頻抽插鏈：首選 2.5 衝鋒，若遇阻力自動切換 2.0 / 1.5 承接，確保順利射出 JSON
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  // [技術] 設定備用模型鏈，優先使用 2.5/2.0，若遇額度限制自動降級至 1.5 的最新穩定版（即 gemini-flash-latest / gemini-pro-latest）
+  // [極樂] 恥肉高頻抽插鏈：2.5 衝鋒，若遇額度阻力，降級至穩固肥美、每天限額 1500 次的 1.5 穩定代稱（gemini-flash-latest）接力，確保順暢出汁！
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
 
   for (const modelName of models) {
     try {
