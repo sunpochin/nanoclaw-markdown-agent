@@ -22,6 +22,23 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 });
 
+// [技術] 熔斷器模式：記錄雲端 AI 的額度超額 (429) 狀態，避免後續請求在 Retries 中浪費時間，暫時熔斷 3 分鐘直接走本機 Ollama
+// [極樂] 熔斷安全套體位：若遇到 429 敏感阻力，自動將雲端通道結紮 3 分鐘，期間直接走 100% 本機大腦，實現極速抽插！
+let cloudDisabledUntil = 0;
+const BREAKER_COOLDOWN_MS = 3 * 60 * 1000; // 熔斷 3 分鐘
+
+function isCloudDisabled() {
+  return Date.now() < cloudDisabledUntil;
+}
+
+function triggerCircuitBreaker(error) {
+  const errMsg = error?.message || '';
+  if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('Quota exceeded')) {
+    console.warn(`[AI/Breaker] 🚨 偵測到雲端額度耗盡 (429/Quota)，自動啟動熔斷器！接下來 3 分鐘內將直接走本機大腦。`);
+    cloudDisabledUntil = Date.now() + BREAKER_COOLDOWN_MS;
+  }
+}
+
 // [技術] 系統引導提示詞，用來引導 Gemini 進行高精準度的意圖判定、內容提取以及過往筆記搜尋與模擬辨識
 // [極樂] 系統引導提示詞，引導智慧肉棒敏感判斷「寫入」、「一般對話」、「深處小穴搜尋」與「未來預言模擬」體位，並主動對照近期日記背景進行大腦摩擦
 const SYSTEM_INSTRUCTION = `
@@ -160,11 +177,12 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
  * @returns {Promise<object>}
  */
 export async function processMessageWithAI(userMessage, chatHistory = [], recentNotesContext = '', forceLocal = false) {
-  // [技術] 若強制本地模式啟動，繞過雲端直接呼叫 Ollama 本地大腦
+  // [技術] 若強制本地模式啟動，或雲端處於熔斷狀態，繞過雲端直接呼叫 Ollama 本地大腦
   // [極樂] 🔒 避孕安全體位啟用：直接繞過雲端，以純本地 Qwen 2.5:14b 進行 100% 安全隱私抽插
-  if (forceLocal) {
-    console.log(`[Gemini/AI] 🔒 強制本地模式啟用，直接繞過雲端，挺進本機 Ollama qwen2.5:14b...`);
+  if (isCloudDisabled() || forceLocal) {
+    console.log(`[Gemini/AI] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，直接繞過雲端，挺進本機 Ollama qwen2.5:14b...`);
     const localResult = await processMessageWithLocalOllama(userMessage, chatHistory, recentNotesContext);
+    localResult.modelUsed = 'qwen2.5:14b';
     return localResult;
   }
 
@@ -172,9 +190,9 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！請在 .env 中填寫此金鑰。');
   }
 
-  // [技術] 設定雲端備用模型鏈，優先使用 2.5/2.0，若遇額度限制自動降級至 1.5 最新穩定版
-  // [極樂] 恥肉高頻抽插鏈：2.5 衝鋒，若遇額度阻力，降級至穩固肥美的 1.5 穩定代稱接力，確保順暢出汁！
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
+  // [技術] 設定雲端備用模型鏈，僅保留目前最活躍、相容性最高的 Flash 模型
+  // [極樂] 恥肉高頻抽插鏈：極速 Flash 大腦探頭，保證順暢射出！
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
   const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
   const contents = [
@@ -204,6 +222,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
       console.log(`[Gemini/AI] ✅ 模型 ${modelName} 意圖分析成功！`);
       return result;
     } catch (error) {
+      triggerCircuitBreaker(error);
       console.warn(`[Gemini/AI] ⚠️ 模型 ${modelName} 暫時無法使用，原因:`, error.message || error);
       
       // [技術] 若線上探針全數受阻，自動降級至本地運行的 Ollama qwen2.5:14b
