@@ -53,8 +53,18 @@ export async function writeNoteToMarkdown(content) {
   const { dateStr, timeStr } = getCurrentDateTime();
   const filePath = path.join(VAULT_DIR, `${dateStr}.md`);
   
-  // 建立符合 Obsidian Daily Notes 的格式樣式
-  const formattedContent = `\n## [${timeStr}] 📝 隨手記\n*   ${content}\n\n---\n`;
+  // 小地洞（小穴）冒險解說法：對多行內容進行排隊進地洞的對齊處理，避免隊伍走偏
+  // 兔子隊長（第一行）可以直接對準洞口進入，後續的兔子隊員們（第二行以後）進洞前都需要側身退後四步（加上四格空白縮排）
+  const indentedContent = content
+    .split('\n')
+    .map((line, index) => {
+      if (index === 0) return line; // 兔子隊長首發，直接對準並進入地洞口
+      return `    ${line}`;        // 兔子隊員們進洞前側身退後四步，保證整齊不脫隊
+    })
+    .join('\n');
+  
+  // 建立符合 Obsidian Daily Notes 的格式樣式 (使用縮排防漏對齊後的內容)
+  const formattedContent = `\n## [${timeStr}] 📝 隨手記\n*   ${indentedContent}\n\n---\n`;
   
   try {
     // 使用 append 模式追加內容，若檔案不存在則自動建立新檔
