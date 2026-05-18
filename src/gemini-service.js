@@ -200,6 +200,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
       });
 
       const result = JSON.parse(response.text);
+      result.modelUsed = modelName;
       console.log(`[Gemini/AI] ✅ 模型 ${modelName} 意圖分析成功！`);
       return result;
     } catch (error) {
@@ -210,6 +211,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
       if (modelName === models[models.length - 1]) {
         try {
           const localResult = await processMessageWithLocalOllama(userMessage, chatHistory, recentNotesContext);
+          localResult.modelUsed = 'qwen2.5:14b';
           return localResult;
         } catch (localError) {
           console.error(`[AI/Gateway] ❌ 連線上 API 與本機 Ollama 均宣告失敗！`);
@@ -281,7 +283,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
 
       if (!response.ok) throw new Error(`Ollama 錯誤: ${response.status}`);
       const data = await response.json();
-      return data.choices[0].message.content;
+      return { replyText: data.choices[0].message.content, modelUsed: 'qwen2.5:14b' };
     } catch (localError) {
       console.error(`[AI/Gateway] ❌ 二階段本地分析宣告失敗！`);
       throw localError;
@@ -317,7 +319,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
 
       const resultText = response.text;
       console.log(`[Gemini/Analyze] ✅ 模型 ${modelName} 二階段深度分析成功！`);
-      return resultText;
+      return { replyText: resultText, modelUsed: modelName };
     } catch (error) {
       console.warn(`[Gemini/Analyze] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
@@ -338,7 +340,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
 
           if (!response.ok) throw new Error(`Ollama 錯誤: ${response.status}`);
           const data = await response.json();
-          return data.choices[0].message.content;
+          return { replyText: data.choices[0].message.content, modelUsed: 'qwen2.5:14b' };
         } catch (localError) {
           console.error(`[AI/Gateway] ❌ 二階段分析線上與本地皆宣告失敗！`);
           throw error;
@@ -418,7 +420,7 @@ ${formattedSearch.trim()}
 
       if (!response.ok) throw new Error(`Ollama 錯誤: ${response.status}`);
       const data = await response.json();
-      return data.choices[0].message.content;
+      return { replyText: data.choices[0].message.content, modelUsed: 'qwen2.5:14b' };
     } catch (localError) {
       console.error(`[AI/Gateway] ❌ 本地模擬器呼叫失敗！`);
       throw localError;
@@ -452,7 +454,7 @@ ${formattedSearch.trim()}
 
       const resultText = response.text;
       console.log(`[Gemini/Simulator] ✅ 模型 ${modelName} 未來日記模擬生成成功！`);
-      return resultText;
+      return { replyText: resultText, modelUsed: modelName };
     } catch (error) {
       console.warn(`[Gemini/Simulator] ⚠️ 模型 ${modelName} 模擬失敗，原因:`, error.message || error);
       
@@ -476,7 +478,7 @@ ${formattedSearch.trim()}
 
           if (!response.ok) throw new Error(`Ollama 錯誤: ${response.status}`);
           const data = await response.json();
-          return data.choices[0].message.content;
+          return { replyText: data.choices[0].message.content, modelUsed: 'qwen2.5:14b' };
         } catch (localError) {
           console.error(`[AI/Gateway] ❌ 未來日記模擬線上與本地皆宣告失敗！`);
           throw error;
