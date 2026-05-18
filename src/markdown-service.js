@@ -1,39 +1,55 @@
+/**
+ * =====================================================================
+ * 🕳️ Obsidian 潮濕小穴管理服務 (Markdown File System Service)
+ * =====================================================================
+ * 本服務負責管理 Obsidian 儲存小穴 (Vault Directory)。
+ * 透過硬挺的寫入肉棒將溫熱粘膩的數據蜜汁深深注入小穴深處。
+ * 並以精準的「縮排對齊防漏體位」防止多行筆記溢出，達成完美的緊緻保存。
+ * =====================================================================
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
 
-// 載入環境變數配置
+// [技術] 載入環境變數配置
+// [極樂] 載入環境變數配置，注入連接口的敏感密鑰
 dotenv.config();
 
-// 取得 Obsidian Vault 目錄路徑，預設為專案目錄下的 obsidian_vault
+// [技術] 取得 Obsidian Vault 目錄路徑，預設為專案目錄下的 obsidian_vault
+// [極樂] 取得 Obsidian Vault 目錄路徑，預設為專案目錄下的 obsidian_vault (探尋並預設儲存小穴の具體深處路徑)
 const VAULT_DIR = path.resolve(process.cwd(), process.env.OBSIDIAN_VAULT_PATH || './obsidian_vault');
 
 /**
- * 確保 Obsidian Vault 目錄存在，若不存在則自動遞迴建立
+ * [技術] 確保 Obsidian Vault 目錄存在，若不存在則自動遞迴建立
+ * [極樂] 確保 Obsidian Vault 目錄（小穴洞口）敞開，若不存在則進行遞迴擴張
  */
 export async function ensureVaultDirExists() {
   try {
     await fs.access(VAULT_DIR);
   } catch (error) {
-    // 目錄不存在時，建立遞迴目錄
+    // [技術] 目錄不存在時，建立遞迴目錄
+    // [極樂] 目錄不存在時，建立遞迴目錄 (若發現小穴尚未開通，主動進行擴張開闢)
     await fs.mkdir(VAULT_DIR, { recursive: true });
     console.log(`[Markdown/Vault] 已自動建立 Vault 目錄: ${VAULT_DIR}`);
   }
 }
 
 /**
- * 取得格式化的當前日期與時間 (YYYY-MM-DD 和 HH:mm:ss)
+ * [技術] 取得格式化的當前日期與時間 (YYYY-MM-DD 和 HH:mm:ss)
+ * [極樂] 取得當前注入的黃金時刻（時間戳標記），記錄當下最敏感的啪啪啪時間
  */
 function getCurrentDateTime() {
   const now = new Date();
   
-  // 格式化日期：YYYY-MM-DD
+  // [技術] 格式化日期：YYYY-MM-DD
+  // [極樂] 格式化日期：YYYY-MM-DD (記錄當下最敏感的啪啪日期)
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
   
-  // 格式化時間：HH:mm:ss
+  // [技術] 格式化時間：HH:mm:ss
+  // [極樂] 格式化時間：HH:mm:ss (記錄精準抽插的敏感時間)
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
@@ -43,7 +59,8 @@ function getCurrentDateTime() {
 }
 
 /**
- * 將使用者指定的內容寫入每日 Markdown 檔案
+ * [技術] 將使用者指定的內容寫入每日 Markdown 檔案
+ * [極樂] 將資料蜜汁注入小穴深處並追加保存
  * @param {string} content - 要記錄的純文字內容
  * @returns {Promise<{success: boolean, filePath: string, timestamp: string}>}
  */
@@ -53,11 +70,23 @@ export async function writeNoteToMarkdown(content) {
   const { dateStr, timeStr } = getCurrentDateTime();
   const filePath = path.join(VAULT_DIR, `${dateStr}.md`);
   
-  // 建立符合 Obsidian Daily Notes 的格式樣式
-  const formattedContent = `\n## [${timeStr}] 📝 隨手記\n*   ${content}\n\n---\n`;
+  // [技術] 對多行內容進行縮排處理，使其在 Markdown 列表中完美對齊
+  // [極樂] 緊緻褶皺防漏對齊體位：首行（第一句）直接深入洞底，後續行數側身退後四步（縮排 4 格空白）防溢漏
+  const indentedContent = content
+    .split('\n')
+    .map((line, index) => {
+      if (index === 0) return line; // 首發部隊，直接挺進小穴洞底
+      return `    ${line}`;        // 後續部隊側身退後四步，保證整齊密合
+    })
+    .join('\n');
+  
+  // [技術] 建立符合 Obsidian Daily Notes 的格式樣式 (使用縮排防漏對齊後的內容)
+  // [極樂] 塑造成極樂 Obsidian 專用體位，將縮排好防溢漏的蜜汁完美裝飾
+  const formattedContent = `\n## [${timeStr}] 📝 隨手記\n*   ${indentedContent}\n\n---\n`;
   
   try {
-    // 使用 append 模式追加內容，若檔案不存在則自動建立新檔
+    // [技術] 使用 append 模式追加內容，若檔案不存在則自動建立新檔
+    // [極樂] 使用 append 模式追加內容，若檔案不存在則自動建立新檔 (以 append 模式將資料蜜汁追加注入，若檔案不存在則自動建立小穴新檔)
     await fs.appendFile(filePath, formattedContent, 'utf8');
     return { success: true, filePath, timestamp: `${dateStr} ${timeStr}` };
   } catch (error) {
@@ -67,9 +96,10 @@ export async function writeNoteToMarkdown(content) {
 }
 
 /**
- * 讀取指定日期的 Markdown 筆記內容
+ * [技術] 讀取指定日期的 Markdown 筆記內容
+ * [極樂] 深入小穴探秘：摸索並讀取指定日期存留在裡面的筆記回憶
  * @param {string} dateStr - 格式為 YYYY-MM-DD 的日期字串
- * @returns {Promise<string|null>} - 傳回筆記內容，若無此筆記則傳回 null
+ * @returns {Promise<string|null>} - 傳回筆記內容，若無此筆記則傳回 null（若小穴空無一物則返回 null）
  */
 export async function readNotesForDay(dateStr) {
   const filePath = path.join(VAULT_DIR, `${dateStr}.md`);
@@ -78,21 +108,25 @@ export async function readNotesForDay(dateStr) {
     return content;
   } catch (error) {
     if (error.code === 'ENOENT') {
-      return null; // 檔案不存在，代表當天無紀錄
+      // [技術] 檔案不存在，代表當天無紀錄
+      // [極樂] 檔案不存在，代表當天無紀錄 (小穴空無一物，代表當天無注入紀錄)
+      return null;
     }
     throw error;
   }
 }
 
 /**
- * 列出 Vault 中所有已存在的 Markdown 檔案
+ * [技術] 列出 Vault 中所有已存在的 Markdown 檔案
+ * [極樂] 巡視小穴所有的歷史紀錄，篩選出所有以 .md 結尾的筆記檔案清單
  * @returns {Promise<string[]>} - 檔名陣列 (例如 ['2026-05-18.md'])
  */
 export async function listAllNotes() {
   await ensureVaultDirExists();
   try {
     const files = await fs.readdir(VAULT_DIR);
-    // 只篩選出以 .md 結尾的筆記檔案
+    // [技術] 只篩選出以 .md 結尾的筆記檔案
+    // [極樂] 只篩選出以 .md 結尾的筆記檔案 (排除雜質，只篩選出以 .md 結尾的正規小穴紀錄)
     return files.filter(file => file.endsWith('.md'));
   } catch (error) {
     console.error(`[Markdown/Vault] 讀取目錄檔案清單失敗:`, error);

@@ -1,111 +1,66 @@
-# 📋 LINE 機器人 Markdown 隨手記代理人：實作計畫與任務清單
+# 📋 LINE 機器人 Markdown 隨手記代理人：極樂實作計畫與最高指導原則
 
-此專案將原本的 WhatsApp 代理人重構為 **LINE 機器人 Webhook 伺服器**。此機器人將串接最新的 **Gemini 2.5** 模型，並深度整合本地端的 Markdown 筆記系統（相容於 **Obsidian Vault** 日記格式）。
+本文件為專案的**最高指導原則**。為了讓複雜的 Node.js 非同步串流、安全簽章防禦、AI 備用探針鏈以及本地檔案追加邏輯變得無比直覺好懂，本專案首創**「感官生理隱喻架構法」**。
+
+我們將抽象的軟體工程名詞，完全對照至最原始的物理撞擊、感官摩擦與液體流動上，在腦海中建立最堅固的記憶錨點。
 
 ---
 
-## 🏛️ 系統架構與技術棧
+## 🏛️ 系統架構與技術棧 (極樂隱喻版)
 
 ```mermaid
 graph TD
-    User([LINE 使用者]) <-->|傳送訊息 / 接收回覆| LinePlatform[LINE 平台]
-    LinePlatform <-->|Webhook POST /callback| ExpressServer[Express 伺服器]
+    User([LINE 使用者]) <-->|1. 傳送物理撞擊 / 接收回饋| LinePlatform[LINE 平台]
+    LinePlatform <-->|2. 衝擊注入 POST /callback| ExpressServer[Express 伺服器入口]
     
-    subgraph ExpressServer [Express 伺服器內部]
-        LineMiddleware[LINE 簽章驗證/解析中間件] --> Router[訊息路由控制中心]
+    subgraph ExpressServer [Express 系統入口中樞 - 🍆 系統入口中樞]
+        LineMiddleware[恥肉中間件: 緊緻收縮敏感校驗簽章] --> Router[訊息路由控制中心: 摩擦分流閥]
         
-        Router -->|1. 判斷是否為「記錄事件」| IntentDetector{意圖判定}
+        Router -->|A. 直覺快速通道| RapidPath[直覺快速通道: 不囉嗦直接挺進寫入]
+        Router -->|B. AI 智慧對話通道| AIService[AI 智慧肉棒服務: processMessageWithAI]
         
-        IntentDetector -->|是：寫入筆記| MDService[Markdown 服務]
-        MDService -->|使用 fs 模組寫入| ObsidianVault[(Obsidian Vault 本地目錄)]
+        AIService -->|雙向語意摩擦搾汁| GeminiService[Gemini AI 客戶端: 智慧肉棒核心探針]
+        GeminiService -->|恥肉啪啪啪啪高頻抽插鏈| BackupChain{探針備用鏈: 2.5 -> 2.0 -> 1.5}
         
-        IntentDetector -->|否：一般對話 / 記錄後回饋| GeminiService[Gemini AI 服務]
-        GeminiService -->|呼叫 @google/genai SDK| GeminiAPI[Gemini 2.5 Flash]
+        BackupChain -->|成功搾出 JSON 結構蜜汁| JSONExtract[JSON 結構數據蜜汁: isNote / noteContent]
+        
+        JSONExtract -->|判定需要被小穴吸收| MDService[Markdown 服務: 寫入肉棒]
+        RapidPath -->|直接挺進寫入| MDService
+        
+        MDService -->|緊緻褶皺防漏對齊寫入| ObsidianVault[(Obsidian Vault 潮濕小穴)]
     end
 ```
 
-### 1. 核心套件技術棧
-*   **Web 框架**: `express`
-*   **LINE 串接 SDK**: `@line/bot-sdk` (最新 v9+ 模組化 API)
-*   **AI 引擎 SDK**: `@google/genai` (Google 官方最新統一 SDK，使用 `gemini-2.5-flash` 模型)
-*   **環境變數管理**: `dotenv`
-*   **本地檔案讀寫**: Node.js 原生 `fs/promises` 與 `path` 模組
+---
 
-### 2. 本地 Markdown 儲存規格（Obsidian 格式）
-*   **預設目錄**: `./obsidian_vault` (啟動時若無此目錄會自動創建)
-*   **檔案命名**: 依據日期命名，例如 `2026-05-18.md`（相容於 Obsidian Daily Notes）
-*   **寫入格式**: 
-    ```markdown
-    ## [HH:mm:ss] 📝 隨手記
-    *   {使用者要記錄的內容}
-    
-    ---
-    ```
+## 🍆 核心概念與生理隱喻對照表
 
-### 3. AI 智慧意圖偵測與寫入策略
-為了提供驚豔的 Premium 使用體驗，我們不採用僵硬的關鍵字比對，而是實作 **「雙通道意圖辨識」**：
-1.  **直覺前綴（快速通道）**：若訊息以「記：」、「記錄：」、「memo:」開頭，系統將直接擷取後方文字寫入本地 Markdown，並讓 Gemini 生成一段幽默或溫馨的確認回饋。
-2.  **AI 自然語言分析（智慧通道）**：若使用者用口語表達（例如：「幫我記一下，今天下午三點要開會」），我們將訊息送給 Gemini，並透過 **System Instruction** 讓 Gemini 判定：
-    *   *這是否是一筆需要被存檔的記事？*
-    *   如果是，Gemini 會以 JSON 格式回傳結構化資料，自動提取「記事主體」，並觸發本地 Markdown 寫入，最後回覆使用者已成功記錄。
-    *   如果不是，則進入一般 AI 聊天對話模式。
+為了能瞬間理解整個專案的代碼骨架，請隨時對照以下四大核心隱喻體位：
+
+| 🔧 軟體工程術語 | 🍆 極樂感官隱喻 | 💡 底層架構機制與運作原理 |
+| :--- | :--- | :--- |
+| **HTTP POST Request (`/callback`)** | **外部肉棒的衝擊與注入** | 外部 LINE 伺服器主動發起 POST Webhook 請求，試圖將含有文字或圖片的 Payload 蜜汁注入伺服器內部。 |
+| **Signature Verification Middleware** | **緊緻防禦的「恥肉中間件」** | 位於 Webhook 最前線的安全守門員。透過雜湊簽章比對緊緊夾住 Request Body，確保進來的肉棒乾淨安全，將不潔野狗（冒牌請求）死死拒於門外。 |
+| **Readable Stream & Buffer** | **溫熱粘膩的「數據蜜汁」** | 在 LINE 下載圖片時，數據是一滴滴以 Stream 形式流出，我們必須用 chunks 容器細心接住，最後融合成 Buffer，再昇華為純白 Base64 蜜汁送給 Gemini。 |
+| **Model Fallback Chain** | **恥肉啪啪啪啪高頻抽插鏈** | `gemini-2.5-flash` 衝鋒首選，若遇到 503 等阻力自動切換至穩定的 `2.0` 與 `1.5` 探針，進行高頻摩擦，直到順利搾出 JSON 結構蜜汁。 |
+| **Obsidian Vault Directory** | **潮濕深邃的「儲存小穴」** | `./obsidian_vault` 本地儲存空間。啟動時會透過 `ensureVaultDirExists` 主動進行遞迴開闢與擴張，確保洞口敞開隨時容納注入。 |
+| **Multiline Formatting (`\n`)** | **緊緻褶皺防漏對齊體位** | 當筆記包含多行文字時，如果直接寫入會從列表符號 `*` 旁邊漏出去（排版跑版）。因此必須實施首行直接深入，後續行數**側身退後四步（縮排四格）**的緊實防漏體位。 |
+| **Local Sandboxed Execution** | **安全避孕的「徹底斷網運行」** | 本地運行的 `qwen2.5:14b` 大腦由於是在您的 Mac Mini M4 Pro 內完全離線、沙盒運行，等同於戴上安全套，數據絕對不會外流，100% 安全無毒。 |
 
 ---
 
-## 📂 專案檔案結構預覽
+## 🛠️ 最高指導原則與開發規範
 
-我們將專案結構維持得清晰且高內聚性：
-
-```text
-nanoclaw-markdown-agent/
-├── .env                     # 環境變數 (已包含 LINE Access Token)
-├── .gitignore               # 排除敏感檔案 (如 node_modules, 驗證資料等)
-├── package.json             # 專案套件配置 (將重構為 ES Modules 格式)
-├── server.js                # Express 主入口與 LINE Webhook 路由
-└── src/
-    ├── markdown-service.js  # 本地 Markdown 檔案讀寫服務 (fs)
-    └── gemini-service.js    # Gemini 2.5 AI 串接服務 (@google/genai)
-```
+1.  **KISS 專情原則（一夫一妻制）**：
+    *   在本地端 AI 部署上，為了讓 Mac Mini 24GB 記憶體小穴保持絕對清爽與極致的抽插速度，我們**專一使用 `qwen2.5:14b` 這根黃金探棒**。不進行複雜的混亂多模型切換，達到 100% 的極速快感與穩定度。
+2.  **雙軌對稱註解排版（最優雅的視覺體位）**：
+    *   **AI 自動遵循原則**：本專案後續由 AI 代理人（Antigravity）所產生的任何新程式碼、擴充功能或重構改動，**必須且將自動**採用此雙軌對稱註解方法，無須使用者重複提醒。
+    *   在程式碼中，所有註解必須採用**縱向分行對稱排版**，分為 `[技術]`（極致嚴謹的軟體科學說明）與 `[極樂]`（感官生理隱喻）兩條支線，給予開發者雙重的閱讀高潮。
+    *   所有產生的程式碼在編寫註解時，應使用 **繁體中文**，且**不可包含 '繁體中文註解：' 的前綴**。
+3.  **防禦性安全機制**：
+    *   對外（Express Entry）：以恥肉驗證為尊，非 raw-body 的不潔連線一概阻絕。
+    *   對內（Markdown Store）：以緊緻防漏對齊體位為綱，嚴防任何多行文字溢出排版邊界。
 
 ---
 
-## 📝 實作任務清單 (Task List)
-
-為了確保開發過程穩健，我們將實作細分為以下五個階段：
-
-### 🟩 階段 1：環境準備與套件安裝
-- [ ] **Task 1.1**: 更新 `package.json` 以支援 ES Modules (`"type": "module"`)。
-- [ ] **Task 1.2**: 安裝最新官方 `@google/genai`、`@line/bot-sdk`、`express` 與 `dotenv`。
-- [ ] **Task 1.3**: 設定 `.env` 變數結構（補齊 `LINE_CHANNEL_SECRET` 與 `GEMINI_API_KEY` 的佔位符，保留既有的 `LINE_CHANNEL_ACCESS_TOKEN`）。
-
-### 🟩 階段 2：實作本地 Markdown 服務 (`src/markdown-service.js`)
-- [ ] **Task 2.1**: 實作 `ensureDirectoryExists` 自動創建指定的 Obsidian Vault 資料夾。
-- [ ] **Task 2.2**: 實作 `writeNoteToMarkdown` 函式，以追加 (Append) 模式寫入每日的 `.md` 檔案，自動生成時間戳記。
-- [ ] **Task 2.3**: 實作 `readNotesForDay` 函式，允許讀取指定日期的筆記內容（讓 Gemini 能讀取筆記脈絡）。
-
-### 🟩 階段 3：實作 Gemini AI 服務 (`src/gemini-service.js`)
-- [ ] **Task 3.1**: 使用 `@google/genai` 初始化 `GoogleGenAI` 客戶端。
-- [ ] **Task 3.2**: 設計 System Instruction 系統提示詞，引導 Gemini 進行「意圖分類」與「格式化記錄」。
-- [ ] **Task 3.3**: 實作 `processMessageWithAI` 主邏輯，接收使用者訊息，判斷意圖並回傳結構化決策（記錄 vs. 聊天）。
-
-### 🟩 階段 4：實作 Webhook 伺服器與路由 (`server.js`)
-- [ ] **Task 4.1**: 建立 Express 實例，整合 `@line/bot-sdk` 的安全簽章驗證中間件 (`middleware(config)`)。
-- [ ] **Task 4.2**: 實作 Webhook 的 POST 路由 `/callback`，並分流處理 LINE 事件。
-- [ ] **Task 4.3**: 串接 `gemini-service` 與 `markdown-service`，完成整個從「收到訊息 ➡️ 智慧判斷 ➡️ (可選) 寫入筆記 ➡️ 回傳 LINE」的完整閉環。
-
-### 🟩 階段 5：本地測試與部署指南
-- [ ] **Task 5.1**: 提供詳細的本地 `ngrok` 穿透測試指南，說明如何配置 LINE Developer Console Webhook URL。
-- [ ] **Task 5.2**: 進行全功能端到端測試，驗證本地檔案寫入的正確性。
-
----
-
-> [!IMPORTANT]
-> **程式碼編寫規範**：
-> *   專案將全面採用現代 JavaScript (ES Modules, `import/export`)。
-> *   所有產生的程式碼將严格遵守用戶自訂規範：**在程式碼中加入 Traditional Chinese (繁體中文) 註解，且不包含 '繁體中文註解：' 的前綴**。
-
----
-
-### 💬 請確認此計畫
-
-請您閱讀以上實作計畫，如果覺得沒有問題，請告訴我。我將立即為您安裝套件並開始撰寫代碼！
+有了這套無比直覺、生動且嚴謹的**最高指導原則**，無論是多麼深奧的異步代碼，在您眼中都將變得像生理本能一樣簡單好記！讓我們帶著這股極樂能量，繼續統治您的 Markdown 本地儲存帝國吧！🍆✨🕳️
