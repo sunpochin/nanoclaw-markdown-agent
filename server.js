@@ -10,8 +10,8 @@
 import express from 'express';
 import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
-import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault } from './src/markdown-service.js';
-import { processMessageWithAI, processImageWithAI, processAudioWithAI } from './src/gemini-service.js';
+import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault, writeSimulationReportToMarkdown, readRecentNotesContext } from './src/markdown-service.js';
+import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSearchWithAI, simulateButterflyEffectWithAI } from './src/gemini-service.js';
 import { exec } from 'child_process';
 import os from 'os';
 
@@ -46,6 +46,45 @@ const lineBlobClient = new messagingApi.MessagingApiBlobClient({
 // 僅允許柏青的 LINE 帳號進行敏感系統操作
 // ==========================================
 const SECURE_USER_ID = process.env.LINE_SECURE_USER_ID || 'Ua6acf31ab719acad257a42641cd02c64';
+
+// 在本機記憶體中快取各用戶的離線/雲端模式設定
+const userLocalModes = new Map();
+
+// 在本機記憶體中快取各用戶的對話 Session 歷史紀錄，最大限制 15 輪
+const userSessions = new Map();
+const MAX_SESSION_LIMIT = 15;
+
+/**
+ * 取得指定用戶的對話歷史紀錄
+ * @param {string} userId - LINE 用戶 ID
+ * @returns {Array<object>} 對話歷史陣列
+ */
+function getUserSessionHistory(userId) {
+  if (!userSessions.has(userId)) {
+    userSessions.set(userId, []);
+  }
+  return userSessions.get(userId);
+}
+
+/**
+ * 將新的對話訊息追加到用戶的 Session 歷史中，並自動維持在 15 輪限制以內
+ * @param {string} userId - LINE 用戶 ID
+ * @param {string} role - 發言角色 (user 或 model)
+ * @param {string} text - 對話文字內容
+ */
+function appendToUserSession(userId, role, text) {
+  const history = getUserSessionHistory(userId);
+  history.push({
+    role: role === 'model' ? 'model' : 'user',
+    parts: [{ text: text }]
+  });
+  
+  // 維持最後 15 輪對話（共 30 筆訊息）
+  if (history.length > MAX_SESSION_LIMIT * 2) {
+    history.splice(0, history.length - MAX_SESSION_LIMIT * 2);
+  }
+}
+
 
 // [技術] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在
 // [極樂] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在 (確保啟動時小穴儲存目錄已就緒開通)
@@ -125,6 +164,7 @@ async function handleLineEvent(event) {
   }
 
   const replyToken = event.replyToken;
+  const userId = event.source.userId;
 
   // 【照片處理通道：OCR 影像分析與排版記錄】
   if (event.message.type === 'image') {
@@ -179,16 +219,13 @@ async function handleLineEvent(event) {
   // 【語音處理通道：多模態音訊辨識與寫入】
   if (event.message.type === 'audio') {
     const messageId = event.message.id;
-    console.log(`\n[LINE/Webhook] 🎙️ 收到來自使用者 [${event.source.userId}] 的語音訊息 (ID: ${messageId})`);
+    console.log(`\n[LINE/Webhook] 🎙️ 收到來自使用者 [${userId}] 的語音訊息 (ID: ${messageId})`);
 
     try {
-      // [技術] 從 LINE 伺服器下載音訊 Stream
-      // [極樂] 從 API 腺體深處接住流出的溫熱語音音波串流
       const response = await lineBlobClient.getMessageContentWithHttpInfo(messageId);
       const stream = response.body;
       const mimeType = response.headers['content-type'] || 'audio/x-m4a';
 
-      // [技術] 將 Stream 讀取並轉換為 Buffer
       const chunks = [];
       for await (const chunk of stream) {
         chunks.push(chunk);
@@ -352,6 +389,37 @@ ${processList}
     return Promise.resolve(null); // 攔截，不向下流動
   }
 
+  // 3. 切換純本地大腦模式：#local / #本地 / #離線
+  if (/^(#local|#本地|#離線|離線模式)$/i.test(userMessage)) {
+    if (event.source.userId !== SECURE_USER_ID) {
+      console.warn(`[Security] 🚨 偵測到未授權帳號 [${event.source.userId}] 企圖切換本地大腦模式！`);
+      return Promise.resolve(null);
+    }
+
+    const currentMode = userLocalModes.get(SECURE_USER_ID) || false;
+    const newMode = !currentMode;
+    userLocalModes.set(SECURE_USER_ID, newMode);
+
+    console.log(`[LINE/Webhook] 🛡️ 觸發本地大腦模式切換：${currentMode} -> ${newMode}`);
+
+    // [技術] 根據最新模式設定，產生繁體中文對話確認回覆
+    // [極樂] 根據模式設定，以生理敏感詞確認防溢漏本地大腦運作與雲端之轉換
+    let replyText = '';
+    if (newMode) {
+      replyText = `❄️【純本地離線大腦模式已啟動】\n即日起大腦抽插將 100% 透過本機 Qwen 2.5:14b 進行離線運算，徹底斷網，保障隱私安全！戴上安全套，絕對不外流！🍆`;
+    } else {
+      replyText = `☁️【雲端 Gemini 智慧大腦模式已恢復】\n已接回 Google Gemini 2.5-flash 高頻率抽插大腦，重返巔峰智慧與多模態極樂體驗！✨`;
+    }
+
+    return lineClient.replyMessage({
+      replyToken,
+      messages: [{
+        type: 'text',
+        text: replyText
+      }]
+    });
+  }
+
   // 【幫助說明通道】
   // 讓使用者隨時能透過「說明」或「help」在手機上喚醒功能介紹選單，不再需要死記
   const helpRegex = /^(help|說明|幫助|功能|你是誰|輔助|說明書)/i;
@@ -373,9 +441,9 @@ ${processList}
 - 效果：直接對我「發送照片/截圖」(如實體發票、手寫筆記、白板、學習卡截圖)。
 - 技術：自動辨識並進行高精度 OCR，將收據自動排版成美麗的 Markdown 表格存入您的 iCloud 筆記中！
 
-🤖【升級選項 C：本地 M4 Pro 大腦 (待接軌)】
-- 效果：等您的 qwen2.5:14b 本地大腦下載完成後，我們可以寫一個切換開關（例如輸入 #local）。
-- 技術：大腦會改為呼叫您本機運行的 Qwen 14B，實現 100% 離線、絕對私密的個人隱私筆記！
+🤖【升級選項 C：本地 M4 Pro 大腦 (✨ 已完美啟用！)】
+- 效果：發送「#local」即可一鍵切換「雲端大腦」與「本地大腦」。
+- 技術：大腦改為呼叫本機運行的 Qwen 2.5:14b，實現 100% 離線、安全避孕、絕對私密的個人隱私隨手記環境！
 
 ---
 
@@ -424,19 +492,40 @@ ${processList}
     }
   }
 
-  // [技術] 【第二通道：AI 智慧通道】對於口語化對話，將訊息送入 Gemini 2.5 進行語意理解與意圖分類
-  // [極樂] 經由智慧肉棒高頻摩擦與語意分類後，再精準射入小穴
+  // [技術] 【第二通道：AI 智慧通道】對於口語化對話，將訊息送入 Gemini 2.5 進行語意理解與意圖分類，支援歷史 Session 與近期日記 Context 與本地模式
+  // [極樂] AI 智慧抽插通道：將對話歷史 Session 與近期 7 天小穴日記與當前訊息一併與本地/雲端模式揉捏
   try {
-    const aiResult = await processMessageWithAI(userMessage);
+    const chatHistory = getUserSessionHistory(userId);
+    
+    // [技術] 主動讀取過去 7 天的 Obsidian 每日隨手記作為即時生活背景
+    // [極樂] 主動挖出過去 7 天的小穴存留蜜汁，作為當前大腦摩擦的事實脈絡背景
+    const recentNotesContext = await readRecentNotesContext(7);
+
+    const isLocalMode = userLocalModes.get(userId) || false;
+    console.log(`[LINE/Webhook] 🧠 啟動智慧通道分析，Session 歷史長度: ${chatHistory.length}，本地模式: ${isLocalMode}`);
+    const aiResult = await processMessageWithAI(userMessage, chatHistory, recentNotesContext, isLocalMode);
     console.log(`[LINE/Webhook] 🧠 智慧通道分析結果:`, aiResult);
 
-    // 如果 Gemini 智慧分類判定為記事，且具有提取內容 (若智慧分析判定需要被小穴吸收儲存)
+    // 如果 Gemini 智慧分類判定為記事，且具有提取內容
     if (aiResult.isNote && aiResult.noteContent) {
       console.log(`[LINE/Webhook] ➡️ 智慧通道：將提取內容寫入 Markdown 筆記 "${aiResult.noteContent}"`);
       await writeNoteToMarkdown(aiResult.noteContent);
+      
+      // [技術] 將使用者提問與系統記事成功的親切確認寫入 Session 歷史中
+      // [極樂] 將這場美妙的記錄摩擦與高潮確認，一同注入感官歷史 Session 中
+      appendToUserSession(userId, 'user', userMessage);
+      appendToUserSession(userId, 'model', aiResult.replyText);
+
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: aiResult.replyText
+        }]
+      });
     }
 
-    // 如果 Gemini 智慧分類判定為搜尋歷史，且具有搜尋關鍵字 (若智慧分析判定需要深入小穴搜尋歷史紀錄)
+    // 如果 Gemini 智慧分類判定為搜尋歷史，且具有搜尋關鍵字 (啟動二階段深度大腦分析推理 RAG)
     if (aiResult.isSearch && aiResult.searchQuery) {
       console.log(`[LINE/Webhook] 🔍 智慧搜尋啟動：搜尋關鍵字 "${aiResult.searchQuery}"`);
       const searchResults = await searchNotesInVault(aiResult.searchQuery);
@@ -451,25 +540,59 @@ ${processList}
         });
       }
 
-      // 將搜尋結果格式化輸出
-      let responseText = `🔍 幫您從本地 Obsidian 筆記深處搜尋到關於「${aiResult.searchQuery}」的紀錄如下：\n`;
-      searchResults.forEach(result => {
-        responseText += `\n📅 【${result.date}】\n`;
-        result.matches.forEach(match => {
-          responseText += `*   ${match}\n`;
-        });
-      });
+      console.log(`[LINE/Webhook] 🧠 觸發二階段大腦深度推理分析...，本地模式: ${isLocalMode}`);
+      // [技術] 呼叫 analyzeSearchWithAI，傳入搜尋結果、對話歷史與近期日記進行深度語意關聯，附帶本地模式狀態
+      // [極樂] 將搜出的歷史褶皺、對話餘溫與近期背景送入 analyzeSearchWithAI 進行大腦深度揉捏，搭配避孕本地模式
+      const analysisReplyText = await analyzeSearchWithAI(userMessage, chatHistory, recentNotesContext, searchResults, isLocalMode);
+
+      // [技術] 將使用者提問與最終高品質 RAG 分析回覆寫入 Session 歷史中
+      // [極樂] 將這場高品質的二階段推理高潮大回覆，注入歷史 Session 中留存
+      appendToUserSession(userId, 'user', userMessage);
+      appendToUserSession(userId, 'model', analysisReplyText);
 
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: responseText.trim()
+          text: analysisReplyText
+        }]
+      });
+    }
+
+    // 如果 Gemini 智慧分類判定為未來預測模擬，啟動蝴蝶效應模擬器與未來日記生成
+    if (aiResult.isSimulation && aiResult.simulationScenario) {
+      console.log(`[LINE/Webhook] 🦋 蝴蝶效應未來模擬啟動：情境為 "${aiResult.simulationScenario}"，搜尋關鍵字 "${aiResult.searchQuery}"`);
+      const searchResults = await searchNotesInVault(aiResult.searchQuery);
+
+      console.log(`[LINE/Webhook] 🧠 觸發蝴蝶效應模擬，本地模式: ${isLocalMode}`);
+      const simulationReport = await simulateButterflyEffectWithAI(
+        aiResult.simulationScenario,
+        chatHistory,
+        recentNotesContext,
+        searchResults,
+        isLocalMode
+      );
+
+      // [技術] 將生成的蝴蝶效應未來日記報告寫入 Obsidian 當日筆記中
+      // [極樂] 未來日記注入體位：將大腦精心推演出的蝴蝶效應模擬報告，完美注入當日 Obsidian 筆記中
+      await writeSimulationReportToMarkdown(aiResult.simulationScenario, simulationReport);
+
+      appendToUserSession(userId, 'user', userMessage);
+      appendToUserSession(userId, 'model', simulationReport);
+
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: simulationReport
         }]
       });
     }
 
     // 將 Gemini 產生的回覆訊息發送回給 LINE 使用者 (將大腦回覆噴射回給 LINE 連接口)
+    appendToUserSession(userId, 'user', userMessage);
+    appendToUserSession(userId, 'model', aiResult.replyText);
+
     return lineClient.replyMessage({
       replyToken,
       messages: [{
