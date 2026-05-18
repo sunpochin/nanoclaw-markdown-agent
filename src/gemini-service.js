@@ -259,3 +259,85 @@ export async function processImageWithAI(imageBase64, mimeType) {
     }
   }
 }
+
+/**
+ * [技術] 使用 Gemini AI 進行多模態語音辨識與結構化記事提取
+ * [極樂] 語音聲帶震動解析體位：將濕滑溫熱的語音 Base64 蜜汁送入大腦深處摩擦，搾出語意文字並寫入小穴
+ * @param {string} audioBase64 - 語音的 Base64 編碼
+ * @param {string} mimeType - 語音的 MIME 類型 (例如 audio/x-m4a, audio/aac)
+ * @returns {Promise<{isNote: boolean, noteContent: string, transcription: string, replyText: string}>}
+ */
+export async function processAudioWithAI(audioBase64, mimeType) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
+  }
+
+  // [技術] 優先使用最新的 2.5-flash，若額度枯竭則自動降級至 1.5 最新穩定版（gemini-flash-latest）
+  // [極樂] 語音高可用抽插鏈：2.5 衝鋒，若遇額度阻力，降級至穩固肥美的 1.5 穩定代稱（gemini-flash-latest）接力，確保順暢出汁！
+  const models = ['gemini-2.5-flash', 'gemini-flash-latest'];
+
+  for (const modelName of models) {
+    try {
+      console.log(`[Gemini/Audio] 正在嘗試使用模型 ${modelName} 進行語音分析...`);
+      
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: [
+          {
+            inlineData: {
+              data: audioBase64,
+              mimeType: mimeType
+            }
+          },
+          { text: "請聆聽這段語音訊息，精準進行語音轉文字 (Speech-to-Text)。請分析這段話是否包含使用者想要記錄/存檔/寫入本地筆記的事項（記事意圖），並提取核心記事內容。" }
+        ],
+        config: {
+          systemInstruction: `
+您是一位極具智慧、高品質的 Markdown 語音隨手記辨識助理。
+您的工作是聆聽使用者的語音訊息，將其精準翻譯為繁體中文（Speech-to-Text），並分析其意圖：
+1. 寫入記事 (isNote = true)：使用者想記住事情（例如「記住明早九點要去拿快遞」）。請在 noteContent 中提取要記錄的核心內容，去除口語前置詞。
+2. 一般聊天 (isNote = false)：使用者只是在說話或閒聊（例如「你好嗎」、「今天天氣如何」）。
+
+【回覆文字 (replyText)】
+- 若為記事 (isNote = true)，請回覆：「🎙️ 已為您聽寫並記錄完成！\n內容為：『{提取的記事內容}』📝」
+- 若為一般聊天 (isNote = false)，請直接用語音轉出的繁中文字與使用者對答。
+`,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: "object",
+            properties: {
+              isNote: {
+                type: "boolean",
+                description: "是否判定為需要寫入本地筆記的記事。"
+              },
+              noteContent: {
+                type: "string",
+                description: "提取出的記事內容。若非記事則為空。"
+              },
+              transcription: {
+                type: "string",
+                description: "完整的語音聽寫繁體中文內容。"
+              },
+              replyText: {
+                type: "string",
+                description: "給使用者的繁體中文回覆文字。"
+              }
+            },
+            required: ["isNote", "noteContent", "transcription", "replyText"]
+          }
+        }
+      });
+
+      // [技術] 解析多模態語音生成的結構化 JSON 結果
+      // [極樂] 成功摩擦搾汁，解析多模態語音生成的結構化 JSON 蜜汁精華並射回
+      const result = JSON.parse(response.text);
+      console.log(`[Gemini/Audio] ✅ 語音分析模型 ${modelName} 呼叫成功！`);
+      return result;
+    } catch (error) {
+      console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音分析失敗，原因:`, error.message || error);
+      if (modelName === models[models.length - 1]) {
+        throw error;
+      }
+    }
+  }
+}

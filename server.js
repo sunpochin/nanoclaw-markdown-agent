@@ -11,7 +11,7 @@ import express from 'express';
 import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault } from './src/markdown-service.js';
-import { processMessageWithAI, processImageWithAI } from './src/gemini-service.js';
+import { processMessageWithAI, processImageWithAI, processAudioWithAI } from './src/gemini-service.js';
 
 // [技術] 載入環境變數設定
 // [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
@@ -168,8 +168,58 @@ async function handleLineEvent(event) {
     }
   }
 
-  // [技術] 僅處理文字訊息，其他非文字/非圖片訊息安全跳過
-  // [極樂] 僅處理文字訊息，其他非文字/非圖片訊息安全跳過 (非文字/非圖片的微弱刺激安全略過)
+  // 【語音處理通道：多模態音訊辨識與寫入】
+  if (event.message.type === 'audio') {
+    const messageId = event.message.id;
+    console.log(`\n[LINE/Webhook] 🎙️ 收到來自使用者 [${event.source.userId}] 的語音訊息 (ID: ${messageId})`);
+
+    try {
+      // [技術] 從 LINE 伺服器下載音訊 Stream
+      // [極樂] 從 API 腺體深處接住流出的溫熱語音音波串流
+      const response = await lineBlobClient.getMessageContentWithHttpInfo(messageId);
+      const stream = response.body;
+      const mimeType = response.headers['content-type'] || 'audio/x-m4a';
+
+      // [技術] 將 Stream 讀取並轉換為 Buffer
+      const chunks = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+      }
+      const audioBuffer = Buffer.concat(chunks);
+      const audioBase64 = audioBuffer.toString('base64');
+
+      // 3. 呼叫 Gemini 進行語音聽寫與意圖分析
+      const audioResult = await processAudioWithAI(audioBase64, mimeType);
+      console.log(`[LINE/Webhook] 🎙️ 語音分析完成，聽寫內容: "${audioResult.transcription}"`);
+
+      // 4. 如果判定為記事，寫入本地 Markdown
+      if (audioResult.isNote && audioResult.noteContent) {
+        console.log(`[LINE/Webhook] ➡️ 語音通道：將提取內容寫入 Markdown 筆記 "${audioResult.noteContent}"`);
+        await writeNoteToMarkdown(audioResult.noteContent);
+      }
+
+      // 5. 回覆解析結果給 LINE 使用者
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: audioResult.replyText
+        }]
+      });
+    } catch (error) {
+      console.error('[LINE/Webhook] 處理語音訊息發生錯誤:', error);
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: '❌ 抱歉，解析語音訊息或進行語意辨識時發生錯誤，請稍後重試。'
+        }]
+      });
+    }
+  }
+
+  // [技術] 僅處理文字訊息，其他非文字/非圖片/非語音訊息安全跳過
+  // [極樂] 僅處理文字訊息，其他非文字/非圖片/非語音訊息安全跳過 (非文字/非圖片/非語音的刺激安全略過)
   if (event.message.type !== 'text') {
     return Promise.resolve(null);
   }
@@ -191,9 +241,9 @@ async function handleLineEvent(event) {
 
 這是為您量身打造的【黑科技升級與功能指南】：
 
-🎙️【升級選項 A：語音隨手記 (待升級)】
+🎙️【升級選項 A：語音隨手記 (✨ 已完美啟用！)】
 - 效果：當您開車或走路手酸時，直接對我發送「語音訊息」。
-- 技術：我會利用 Gemini 多模態語音辨識將語音自動轉為文字，提取重點並寫入您的筆記中！
+- 技術：自動聆聽您的音訊，進行高精度語音聽寫與繁體中文轉譯，提取核心筆記並存入 iCloud 中！
 
 📸【升級選項 B：影像 OCR 結構化 (✨ 已完美啟用！)】
 - 效果：直接對我「發送照片/截圖」(如實體發票、手寫筆記、白板、學習卡截圖)。
