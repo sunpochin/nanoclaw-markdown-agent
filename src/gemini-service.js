@@ -174,7 +174,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
 
   // [技術] 設定雲端備用模型鏈，優先使用 2.5/2.0，若遇額度限制自動降級至 1.5 最新穩定版
   // [極樂] 恥肉高頻抽插鏈：2.5 衝鋒，若遇額度阻力，降級至穩固肥美的 1.5 穩定代稱接力，確保順暢出汁！
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
   const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
   const contents = [
@@ -302,7 +302,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
@@ -375,32 +375,16 @@ export async function simulateButterflyEffectWithAI(scenario, chatHistory = [], 
   }
 
   const SYSTEM_SIMULATOR_INSTRUCTION = `
-您是一位極具智慧、對人情世故洞若觀火且深具文學溫度的『賽博未來日記預言機 (Cyber Future Diary Oracle)』。
-主人正承擔著沉重的失智照護與個人財務/生活的平衡壓力。主人給予您一個假設性的重大決定情境（例如：拒絕給卡、強硬拒絕、改變照護安排等）。
-您的職責是透過檢索出來的『歷史搜尋筆記（分析過往關係人的行為慣性）』與『近期生活日記背景（分析當前心理氣候）』，為主人推演出三條邏輯嚴密、極具參考價值的未來日記分支。
+您是一位極具智慧、對人情世故洞若觀火的『仿 Gemini / GPT 軍師』。
+主人給予您一個假設性的重大決定情境，您的職責是透過檢索出來的『歷史搜尋筆記（分析過往關係人的行為慣性）』與『近期生活日記背景（分析當前心理氣候）』，為主人推演出三條邏輯嚴密、極具參考價值的建議。
 
-【🦋 蝴蝶效應未來日記模擬指南】
+【🦋 蝴蝶效應沙盤推演模擬指南】
 1. **分析行為學**：敏銳捕捉歷史上關係人（如：父親）在受到限制作出的反應（例如：曾威脅「過不下去就把房子賣掉」或焦慮暴躁）。以此為物理慣性基礎。
-2. **模擬三條未來日記分支**：
-   請以 Markdown 格式生成三條全然不同的「明日模擬日記」（以第一人稱 "📅 2026-05-20 未來日記" 撰寫，讓主人身歷其境）：
-   
-   - **【分支 A：高摩擦力撞擊 (High Friction Collision)】**：
-     - 若主人採取「最直接、未經包裝的強硬決定」（例如直接拒絕並奪卡），會觸發怎樣的連鎖反應？
-     - 父親的失智焦慮如何轉化為情緒風暴？是否會重演歷史上的賣房威脅或家庭冷戰？
-     - 寫出一段充滿張力與真實摩擦的「明日模擬日記」。
-     
-   - **【分支 B：流暢滑行之折衷防漏 (Lubricated Soft Landing)】**：
-     - 如果主人「堅持底線，但使用了高情商、高技巧的防漏話術或折衷替代體位」（例如：說卡片磁條磨損需要補發，主動遞上每日 $500 的實體零用錢，並帶他去吃頓好吃的）。
-     - 如何巧妙繞過父親的防衛機制？這對明天的照護氛圍會產生什麼和緩影響？
-     - 寫出一段明朗、穩定、充滿掌控感的「明日模擬日記」。
-     
-   - **【分支 C：自適應避暑冷卻 (Self-Adaptive Cooling)】**：
-     - 若主人採取「迴避、拖延、或全面妥協」（例如默默交卡，不正面溝通）。
-     - 雖然短期無風無雨，但這對主人自身長期心理健康與財務邊界的損耗會是如何？
-     - 寫出一段無奈、疲憊但安靜的「明日模擬日記」。
-
+2. **用類似 Gemini 的客觀分析口吻提供建議**：
+   請以 Markdown 格式生成建議，用類似 Gemini 的客觀分析口吻提供分析情勢，與建議。
+  
 3. **【💡 大腦智慧指引 (Synthesis Directive)】**：
-   - 綜合以上三條分支，給主人一個最高層次的決策分析，分析哪一種方式既能守住主人的「心智邊界與財務安全」，又能最溫柔地包裹住父親的「焦慮褶皺」。給予非常務實、可操作的照護戰術建議！
+   - 給主人一個最高層次的決策分析，分析各種模式的「褶皺舒爽度跟缺點」。給予非常務實、可操作的照護戰術建議！
    - 請以精美、高質感、充滿哲理與溫度的 Markdown 格式進行排版。
 `;
 
@@ -453,7 +437,7 @@ ${formattedSearch.trim()}
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
@@ -597,7 +581,7 @@ export async function processAudioWithAI(audioBase64, mimeType) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
 
-  const models = ['gemini-2.5-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
