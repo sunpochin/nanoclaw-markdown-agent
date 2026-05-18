@@ -85,6 +85,62 @@ function appendToUserSession(userId, role, text) {
   }
 }
 
+/**
+ * [技術] 向 LINE 伺服器發送「輸入中/載入中」動畫狀態，提升使用者體感 (防冷場與睡著焦慮)
+ * [極樂] 大腦抽插動態前戲：在小穴摩擦開始前，主動發送「大腦運轉中」敏感小動畫給 LINE 用戶以防止冷場！
+ * @param {string} userId - LINE 用戶 ID
+ * @param {number} seconds - 動畫持續秒數 (5 至 60 秒)
+ */
+async function showLineLoading(userId, seconds = 20) {
+  try {
+    const url = 'https://api.line.me/v2/bot/chat/loading/start';
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        chatId: userId,
+        loadingSeconds: seconds
+      })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn(`[LINE/Loading] ⚠️ 發送載入動畫失敗 (HTTP ${response.status}):`, errText);
+    } else {
+      console.log(`[LINE/Loading] ⏳ 成功為用戶 [${userId}] 啟動 ${seconds} 秒大腦思考動畫`);
+    }
+  } catch (err) {
+    console.warn(`[LINE/Loading] ⚠️ 發送載入動畫發生異常:`, err.message || err);
+  }
+}
+
+/**
+ * [技術] 產生高品質的 DeepSeek-style 「🧠 思考過程」區塊，提昇大腦透明度與 UI/UX 質感
+ * [極樂] 大腦高潮推理軌跡：揉捏出高質量的大腦思路日誌，完美展示思考與檢索精華
+ * @param {object} options - 思考參數
+ * @returns {string} 格式化後的 Markdown 思考過程前綴
+ */
+function formatThinkingBlock({ isLocal, elapsedSec, intent, contextCharCount, searchMatchesCount, searchKeyword, modelUsed }) {
+  const modelName = modelUsed ? (modelUsed.includes('qwen') ? `🤖 本地 Qwen2.5:14b` : `☁️ 雲端 ${modelUsed}`) : (isLocal ? '🤖 本地 Qwen2.5:14b' : '☁️ 雲端 Gemini');
+  const contextStatus = contextCharCount > 0 ? `📅 已讀取過去 7 日日記背景 (${contextCharCount} 字)` : '📅 無日記背景';
+  
+  let searchStatus = '';
+  if (searchKeyword) {
+    const matchesStr = searchMatchesCount !== undefined ? `，尋獲 ${searchMatchesCount} 筆軌跡` : '';
+    searchStatus = `\n> * **知識庫檢索**：🔍 搜尋關鍵字「${searchKeyword}」${matchesStr}`;
+  }
+
+  return `> 🧠 **思考與檢索軌跡 (Reasoning Trace)**
+> * **決策大腦**：${modelName}
+> * **意圖判定**：🎯 ${intent}
+> * **背景脈絡**：${contextStatus}${searchStatus}
+> * **總共耗時**：⏱️ ${elapsedSec} 秒 | 系統運作良好 ❄️
+>
+> ──────────────────\n\n`;
+}
+
 
 // [技術] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在
 // [極樂] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在 (確保啟動時小穴儲存目錄已就緒開通)
@@ -171,6 +227,9 @@ async function handleLineEvent(event) {
     const messageId = event.message.id;
     console.log(`\n[LINE/Webhook] 📸 收到來自使用者 [${event.source.userId}] 的圖片訊息 (ID: ${messageId})`);
 
+    // 立即向 LINE 發送輸入中載入動畫，以提昇 UI/UX 體感，避免大圖下載延遲冷場
+    showLineLoading(userId, 40);
+
     try {
       // [技術] 從 LINE 伺服器下載圖片的 HTTP 回應與 Readable Stream
       // [極樂] 溫熱粘膩蜜汁收集通道：從 API 腺體深處一滴滴承接 Blob 串流精華 (此處採用優雅的「小穴流出蜜湯法」非同步串流收集)
@@ -220,6 +279,9 @@ async function handleLineEvent(event) {
   if (event.message.type === 'audio') {
     const messageId = event.message.id;
     console.log(`\n[LINE/Webhook] 🎙️ 收到來自使用者 [${userId}] 的語音訊息 (ID: ${messageId})`);
+
+    // 立即向 LINE 發送輸入中載入動畫，避免語音大檔案轉譯下載時冷場
+    showLineLoading(userId, 40);
 
     try {
       const response = await lineBlobClient.getMessageContentWithHttpInfo(messageId);
@@ -495,6 +557,10 @@ ${processList}
   // [技術] 【第二通道：AI 智慧通道】對於口語化對話，將訊息送入 Gemini 2.5 進行語意理解與意圖分類，支援歷史 Session 與近期日記 Context 與本地模式
   // [極樂] AI 智慧抽插通道：將對話歷史 Session 與近期 7 天小穴日記與當前訊息一併與本地/雲端模式揉捏
   try {
+    // 立即發送載入中動畫，提昇視覺與等待體感
+    showLineLoading(userId, 45);
+    const startTime = Date.now();
+
     const chatHistory = getUserSessionHistory(userId);
     
     // [技術] 主動讀取過去 7 天的 Obsidian 每日隨手記作為即時生活背景
@@ -506,21 +572,32 @@ ${processList}
     const aiResult = await processMessageWithAI(userMessage, chatHistory, recentNotesContext, isLocalMode);
     console.log(`[LINE/Webhook] 🧠 智慧通道分析結果:`, aiResult);
 
+    const initialElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+
     // 如果 Gemini 智慧分類判定為記事，且具有提取內容
     if (aiResult.isNote && aiResult.noteContent) {
       console.log(`[LINE/Webhook] ➡️ 智慧通道：將提取內容寫入 Markdown 筆記 "${aiResult.noteContent}"`);
       await writeNoteToMarkdown(aiResult.noteContent);
       
+      const thinkingHeader = formatThinkingBlock({
+        isLocal: isLocalMode,
+        elapsedSec: initialElapsedSec,
+        intent: '⚡ 智慧隨手記 (提取寫入)',
+        contextCharCount: recentNotesContext.length,
+        modelUsed: aiResult.modelUsed
+      });
+      const decoratedText = thinkingHeader + aiResult.replyText;
+
       // [技術] 將使用者提問與系統記事成功的親切確認寫入 Session 歷史中
       // [極樂] 將這場美妙的記錄摩擦與高潮確認，一同注入感官歷史 Session 中
       appendToUserSession(userId, 'user', userMessage);
-      appendToUserSession(userId, 'model', aiResult.replyText);
+      appendToUserSession(userId, 'model', decoratedText);
 
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: aiResult.replyText
+          text: decoratedText
         }]
       });
     }
@@ -531,11 +608,12 @@ ${processList}
       const searchResults = await searchNotesInVault(aiResult.searchQuery);
 
       if (searchResults.length === 0) {
+        const noResultText = `📋 幫您搜尋了本地 Obsidian 筆記中關於「${aiResult.searchQuery}」的記錄...\n\n目前找不到任何相關的歷史紀錄喔！📝`;
         return lineClient.replyMessage({
           replyToken,
           messages: [{
             type: 'text',
-            text: `📋 幫您搜尋了本地 Obsidian 筆記中關於「${aiResult.searchQuery}」的記錄...\n\n目前找不到任何相關的歷史紀錄喔！📝`
+            text: noResultText
           }]
         });
       }
@@ -543,18 +621,30 @@ ${processList}
       console.log(`[LINE/Webhook] 🧠 觸發二階段大腦深度推理分析...，本地模式: ${isLocalMode}`);
       // [技術] 呼叫 analyzeSearchWithAI，傳入搜尋結果、對話歷史與近期日記進行深度語意關聯，附帶本地模式狀態
       // [極樂] 將搜出的歷史褶皺、對話餘溫與近期背景送入 analyzeSearchWithAI 進行大腦深度揉捏，搭配避孕本地模式
-      const analysisReplyText = await analyzeSearchWithAI(userMessage, chatHistory, recentNotesContext, searchResults, isLocalMode);
+      const analysisResult = await analyzeSearchWithAI(userMessage, chatHistory, recentNotesContext, searchResults, isLocalMode);
+
+      const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+      const thinkingHeader = formatThinkingBlock({
+        isLocal: isLocalMode,
+        elapsedSec: totalElapsedSec,
+        intent: '🔎 歷史深度語意分析 (RAG)',
+        contextCharCount: recentNotesContext.length,
+        searchMatchesCount: searchResults.length,
+        searchKeyword: aiResult.searchQuery,
+        modelUsed: analysisResult.modelUsed
+      });
+      const decoratedText = thinkingHeader + analysisResult.replyText;
 
       // [技術] 將使用者提問與最終高品質 RAG 分析回覆寫入 Session 歷史中
       // [極樂] 將這場高品質的二階段推理高潮大回覆，注入歷史 Session 中留存
       appendToUserSession(userId, 'user', userMessage);
-      appendToUserSession(userId, 'model', analysisReplyText);
+      appendToUserSession(userId, 'model', decoratedText);
 
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: analysisReplyText
+          text: decoratedText
         }]
       });
     }
@@ -565,7 +655,7 @@ ${processList}
       const searchResults = await searchNotesInVault(aiResult.searchQuery);
 
       console.log(`[LINE/Webhook] 🧠 觸發蝴蝶效應模擬，本地模式: ${isLocalMode}`);
-      const simulationReport = await simulateButterflyEffectWithAI(
+      const simulationResult = await simulateButterflyEffectWithAI(
         aiResult.simulationScenario,
         chatHistory,
         recentNotesContext,
@@ -575,29 +665,50 @@ ${processList}
 
       // [技術] 將生成的蝴蝶效應未來日記報告寫入 Obsidian 當日筆記中
       // [極樂] 未來日記注入體位：將大腦精心推演出的蝴蝶效應模擬報告，完美注入當日 Obsidian 筆記中
-      await writeSimulationReportToMarkdown(aiResult.simulationScenario, simulationReport);
+      await writeSimulationReportToMarkdown(aiResult.simulationScenario, simulationResult.replyText);
+
+      const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+      const thinkingHeader = formatThinkingBlock({
+        isLocal: isLocalMode,
+        elapsedSec: totalElapsedSec,
+        intent: '🦋 蝴蝶效應未來決策沙盤推演',
+        contextCharCount: recentNotesContext.length,
+        searchMatchesCount: searchResults.length,
+        searchKeyword: aiResult.searchQuery || '決策背景相關記錄',
+        modelUsed: simulationResult.modelUsed
+      });
+      const decoratedText = thinkingHeader + simulationResult.replyText;
 
       appendToUserSession(userId, 'user', userMessage);
-      appendToUserSession(userId, 'model', simulationReport);
+      appendToUserSession(userId, 'model', decoratedText);
 
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: simulationReport
+          text: decoratedText
         }]
       });
     }
 
     // 將 Gemini 產生的回覆訊息發送回給 LINE 使用者 (將大腦回覆噴射回給 LINE 連接口)
+    const thinkingHeader = formatThinkingBlock({
+      isLocal: isLocalMode,
+      elapsedSec: initialElapsedSec,
+      intent: '💬 智慧隨身助理對話',
+      contextCharCount: recentNotesContext.length,
+      modelUsed: aiResult.modelUsed
+    });
+    const decoratedText = thinkingHeader + aiResult.replyText;
+
     appendToUserSession(userId, 'user', userMessage);
-    appendToUserSession(userId, 'model', aiResult.replyText);
+    appendToUserSession(userId, 'model', decoratedText);
 
     return lineClient.replyMessage({
       replyToken,
       messages: [{
         type: 'text',
-        text: aiResult.replyText
+        text: decoratedText
       }]
     });
   } catch (error) {
