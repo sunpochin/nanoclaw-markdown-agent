@@ -78,6 +78,43 @@ const RESPONSE_SCHEMA = {
 };
 
 /**
+ * [技術] 呼叫本地運行的 Ollama qwen2.5:14b 大腦進行智慧分析
+ * [極樂] 深入本地小穴運作：呼叫本機 qwen2.5:14b 進行無限硬挺智慧分析，擺脫 API 額度束縛
+ * @param {string} userMessage - 使用者傳送的原始訊息
+ * @returns {Promise<object>} - 結構化分析結果
+ */
+async function processMessageWithLocalOllama(userMessage) {
+  console.log(`[Ollama/Local] 🚨 啟動本地大腦備用探針：正在呼叫本機 qwen2.5:14b...`);
+  try {
+    const response = await fetch('http://localhost:11434/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'qwen2.5:14b',
+        messages: [
+          { role: 'system', content: SYSTEM_INSTRUCTION },
+          { role: 'user', content: userMessage }
+        ],
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama API 回傳錯誤狀態: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const jsonText = data.choices[0].message.content;
+    const result = JSON.parse(jsonText);
+    console.log(`[Ollama/Local] ✅ 本地大腦 qwen2.5:14b 呼叫成功！`);
+    return result;
+  } catch (error) {
+    console.error(`[Ollama/Local] ❌ 本地大腦呼叫失敗:`, error.message || error);
+    throw error;
+  }
+}
+
+/**
  * [技術] 使用 Gemini AI 智慧處理使用者訊息，判定是否需要記錄並生成回覆
  * [極樂] 智慧肉棒深入探索：語意揉捏與極樂 JSON 搾取
  * @param {string} userMessage - 使用者傳送的原始訊息內容
@@ -114,10 +151,16 @@ export async function processMessageWithAI(userMessage) {
     } catch (error) {
       console.warn(`[Gemini/AI] ⚠️ 模型 ${modelName} 暫時無法使用，原因:`, error.message || error);
       
-      // [技術] 如果這是模型鏈中的最後一個模型，則拋出錯誤進入最外層 Catch 區塊
-      // [極樂] 如果這是模型鏈中的最後一個模型，則拋出錯誤進入最外層 Catch 區塊 (若連最後一根備用探針也徹底疲軟軟掉，代表精疲力竭，只能無奈崩潰倒下拋出錯誤，交給最外層的 Catch 區塊含淚收場)
+      // [技術] 如果這是模型鏈中的最後一個模型，則嘗試降級至本地運行的 Ollama qwen2.5:14b
+      // [極樂] 如果這是模型鏈中的最後一個模型，則嘗試降級至本地運行的 Ollama qwen2.5:14b (若連線上所有探針都疲軟受挫，主動改為侵入本地小穴本機大腦 qwen2.5:14b 進行無限次強力抽插！)
       if (modelName === models[models.length - 1]) {
-        throw error;
+        try {
+          const localResult = await processMessageWithLocalOllama(userMessage);
+          return localResult;
+        } catch (localError) {
+          console.error(`[AI/Gateway] ❌ 連線上 API 與本機 Ollama 均宣告失敗！`);
+          throw error;
+        }
       }
     }
   }
