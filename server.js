@@ -10,7 +10,7 @@
 import express from 'express';
 import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
-import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes } from './src/markdown-service.js';
+import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault } from './src/markdown-service.js';
 import { processMessageWithAI, processImageWithAI } from './src/gemini-service.js';
 
 // [技術] 載入環境變數設定
@@ -260,6 +260,39 @@ async function handleLineEvent(event) {
     if (aiResult.isNote && aiResult.noteContent) {
       console.log(`[LINE/Webhook] ➡️ 智慧通道：將提取內容寫入 Markdown 筆記 "${aiResult.noteContent}"`);
       await writeNoteToMarkdown(aiResult.noteContent);
+    }
+
+    // 如果 Gemini 智慧分類判定為搜尋歷史，且具有搜尋關鍵字 (若智慧分析判定需要深入小穴搜尋歷史紀錄)
+    if (aiResult.isSearch && aiResult.searchQuery) {
+      console.log(`[LINE/Webhook] 🔍 智慧搜尋啟動：搜尋關鍵字 "${aiResult.searchQuery}"`);
+      const searchResults = await searchNotesInVault(aiResult.searchQuery);
+
+      if (searchResults.length === 0) {
+        return lineClient.replyMessage({
+          replyToken,
+          messages: [{
+            type: 'text',
+            text: `📋 幫您搜尋了本地 Obsidian 筆記中關於「${aiResult.searchQuery}」的記錄...\n\n目前找不到任何相關的歷史紀錄喔！📝`
+          }]
+        });
+      }
+
+      // 將搜尋結果格式化輸出
+      let responseText = `🔍 幫您從本地 Obsidian 筆記深處搜尋到關於「${aiResult.searchQuery}」的紀錄如下：\n`;
+      searchResults.forEach(result => {
+        responseText += `\n📅 【${result.date}】\n`;
+        result.matches.forEach(match => {
+          responseText += `*   ${match}\n`;
+        });
+      });
+
+      return lineClient.replyMessage({
+        replyToken,
+        messages: [{
+          type: 'text',
+          text: responseText.trim()
+        }]
+      });
     }
 
     // 將 Gemini 產生的回覆訊息發送回給 LINE 使用者 (將大腦回覆噴射回給 LINE 連接口)

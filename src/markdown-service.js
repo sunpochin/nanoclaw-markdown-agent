@@ -133,3 +133,44 @@ export async function listAllNotes() {
     throw error;
   }
 }
+
+/**
+ * [技術] 搜尋本地 Vault 目錄下所有筆記是否含有指定關鍵字
+ * [極樂] 小穴內深處翻找搜尋體位：精準搜尋包含特定蜜汁（關鍵字）的歷史褶皺
+ * @param {string} query - 要搜尋的關鍵字
+ * @returns {Promise<Array<{date: string, matches: string[]}>>} - 包含匹配行與日期的陣列
+ */
+export async function searchNotesInVault(query) {
+  await ensureVaultDirExists();
+  try {
+    const files = await fs.readdir(VAULT_DIR);
+    const mdFiles = files.filter(file => file.endsWith('.md'));
+    const results = [];
+
+    for (const file of mdFiles) {
+      const filePath = path.join(VAULT_DIR, file);
+      const content = await fs.readFile(filePath, 'utf8');
+
+      if (content.toLowerCase().includes(query.toLowerCase())) {
+        const lines = content.split('\n');
+        // [技術] 篩選含有關鍵字的行數，去除前後空白
+        // [極樂] 精細撈出含有特定體液痕跡的褶皺行數，排除多餘雜質空白
+        const matchedLines = lines
+          .filter(line => line.toLowerCase().includes(query.toLowerCase()))
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        if (matchedLines.length > 0) {
+          results.push({
+            date: file.replace('.md', ''),
+            matches: matchedLines
+          });
+        }
+      }
+    }
+    return results;
+  } catch (error) {
+    console.error(`[Markdown/Vault] 搜尋筆記關鍵字失敗:`, error);
+    return [];
+  }
+}
