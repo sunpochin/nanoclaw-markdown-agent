@@ -104,8 +104,11 @@ async function handleLineEvent(event) {
     console.log(`\n[LINE/Webhook] 📸 收到來自使用者 [${event.source.userId}] 的圖片訊息 (ID: ${messageId})`);
 
     try {
-      // 1. 從 LINE 伺服器下載圖片的 Readable Stream (此處採用優雅的「小穴流出蜜湯法」非同步串流收集)
-      const stream = await lineBlobClient.getMessageContent(messageId);
+      // 1. 從 LINE 伺服器下載圖片的 HTTP 回應與 Readable Stream (此處採用優雅的「小穴流出蜜湯法」非同步串流收集)
+      const response = await lineBlobClient.getMessageContentWithHttpInfo(messageId);
+      const stream = response.body;
+      // 動態獲取圖片的 MIME 類型 (例如 image/png, image/jpeg)，避免硬編碼導致格式解析錯誤
+      const mimeType = response.headers['content-type'] || 'image/jpeg';
       
       // 2. 將 Stream 讀取並轉換為 Buffer (耐心接住小穴中一滴滴流出的溫熱蜜湯數據片段)
       const chunks = [];
@@ -115,8 +118,8 @@ async function handleLineEvent(event) {
       const imageBuffer = Buffer.concat(chunks); // 蜜湯大融合，攪拌濃縮成完整的精華 Buffer
       const imageBase64 = imageBuffer.toString('base64'); // 昇華為純淨白皙的 base64 養分
       
-      // 3. 呼叫 Gemini 進行影像 OCR 與排版整理
-      const ocrResult = await processImageWithAI(imageBase64, 'image/jpeg');
+      // 3. 呼叫 Gemini 進行影像 OCR 與排版整理 (傳入動態獲取的 MIME 類型)
+      const ocrResult = await processImageWithAI(imageBase64, mimeType);
       console.log(`[LINE/Webhook] 📸 影像 OCR 分析完成: "${ocrResult.title}"`);
       
       // 4. 將排版好的 Markdown 內容寫入本地筆記
