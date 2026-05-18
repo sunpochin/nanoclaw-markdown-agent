@@ -174,7 +174,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
 
   // [技術] 設定雲端備用模型鏈，優先使用 2.5/2.0，若遇額度限制自動降級至 1.5 最新穩定版
   // [極樂] 恥肉高頻抽插鏈：2.5 衝鋒，若遇額度阻力，降級至穩固肥美的 1.5 穩定代稱接力，確保順暢出汁！
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest', 'gemini-pro-latest'];
   const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
   const contents = [
@@ -302,7 +302,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
@@ -437,7 +437,7 @@ ${formattedSearch.trim()}
     }
   ];
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
@@ -533,7 +533,7 @@ export async function processImageWithAI(imageBase64, mimeType) {
     required: ["title", "ocrContent", "replyText"]
   };
 
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-native-audio-latest'];
 
   for (const modelName of models) {
     try {
@@ -581,7 +581,7 @@ export async function processAudioWithAI(audioBase64, mimeType) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-native-audio-latest', 'gemini-flash-latest'];
 
   for (const modelName of models) {
     try {
