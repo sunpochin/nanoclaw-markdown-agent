@@ -104,16 +104,16 @@ async function handleLineEvent(event) {
     console.log(`\n[LINE/Webhook] 📸 收到來自使用者 [${event.source.userId}] 的圖片訊息 (ID: ${messageId})`);
 
     try {
-      // 1. 從 LINE 伺服器下載圖片的 Readable Stream
+      // 1. 從 LINE 伺服器下載圖片的 Readable Stream (此處採用優雅的「小穴流出蜜湯法」非同步串流收集)
       const stream = await lineBlobClient.getMessageContent(messageId);
       
-      // 2. 將 Stream 讀取並轉換為 Buffer
+      // 2. 將 Stream 讀取並轉換為 Buffer (耐心接住小穴中一滴滴流出的溫熱蜜湯數據片段)
       const chunks = [];
       for await (const chunk of stream) {
-        chunks.push(chunk);
+        chunks.push(chunk); // 將流出的蜜湯滴滴收集起來，完美收納
       }
-      const imageBuffer = Buffer.concat(chunks);
-      const imageBase64 = imageBuffer.toString('base64');
+      const imageBuffer = Buffer.concat(chunks); // 蜜湯大融合，攪拌濃縮成完整的精華 Buffer
+      const imageBase64 = imageBuffer.toString('base64'); // 昇華為純淨白皙的 base64 養分
       
       // 3. 呼叫 Gemini 進行影像 OCR 與排版整理
       const ocrResult = await processImageWithAI(imageBase64, 'image/jpeg');
