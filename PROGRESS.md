@@ -53,11 +53,21 @@
 *   請確認 `.env` 中的 `GEMINI_API_KEY`、LINE 金鑰及 `OBSIDIAN_VAULT_PATH` 設定正確。
 
 ### 2. 啟動伺服器
-在終端機中執行：
-```bash
-# 使用開發模式啟動，支援存檔自動重啟
-npm run dev
-```
+本專案支援前台開發模式與後台守護犬（PM2）兩種啟動體位：
+
+*   **體位 A：PM2 後台永動守護（極力推薦！關閉 Terminal / 開機自動啟動）**
+    ```bash
+    # 使用配置好的設定檔在後台啟動服務並持續監聽
+    npx pm2 start ecosystem.config.cjs
+    ```
+    > 關於 PM2 免 Sudo 安全通道與生理感官隱喻的詳細說明，請參閱：[PM2_DAEMON_GUIDE.md](file:///Users/pac/codes/nanoclaw-markdown-agent/PM2_DAEMON_GUIDE.md)。
+
+*   **體位 B：前台直覺除錯模式**
+    ```bash
+    # 使用開發模式啟動，前台即時輸出日誌
+    npm run dev
+    ```
+
 
 ### 3. 對接 LINE Webhook
 由於 LINE 需要 HTTPS Webhook，請啟動您的 `ngrok`：

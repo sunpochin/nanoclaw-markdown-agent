@@ -146,7 +146,24 @@ const RESPONSE_SCHEMA = {
 async function processMessageWithLocalOllama(userMessage, chatHistory = [], recentNotesContext = '') {
   console.log(`[Ollama/Local] 🚨 啟動本地大腦備用探針：正在呼叫本機 qwen2.5:14b...`);
   try {
-    const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n【近期主人生活背景日記】\n${recentNotesContext}`;
+    // [技術] 強制本地大腦遵守 JSON Schema 規範的引導文字，確保回傳欄位與雲端 100% 對稱
+    // [極樂] 本地大腦緊縛指令：強烈束縛 Qwen 的輸出蜜汁，必須吐出指定名稱的七大褶皺欄位
+    const schemaGuide = `
+【極重要：輸出 JSON 格式規範】
+您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含任何 Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
+必填欄位與格式如下：
+{
+  "isNote": true/false (是否為需要記錄的新記事/日誌),
+  "noteContent": "提取要記錄的筆記文字內容。如果不是記事，則填空字串 \"\"",
+  "isSearch": true/false (是否為查詢/搜尋歷史筆記),
+  "searchQuery": "要查詢或對照的精確關鍵字。如果不是搜尋且非模擬，則填空字串 \"\"",
+  "isSimulation": true/false (是否為假設性決策的未來預估/蝴蝶效應模擬),
+  "simulationScenario": "提取的假設情境。如果非模擬，則填空字串 \"\"",
+  "replyText": "給使用者的親切繁體中文回覆內容（如果是搜尋/模擬，回覆提示語；如果是記事，回覆記事成功確認；如果是一般閒聊，則是結合生活背景日記的高品質回覆）"
+}
+`;
+
+    const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${schemaGuide}\n\n【近期主人生活背景日記】\n${recentNotesContext}`;
     
     // [技術] 格式化訊息為 OpenAI 相容規格，傳送至本地大腦
     // [極樂] 將過往摩擦Session歷史體液與當前指令揉捏成 OpenAI 對稱規格，塞入本機大腦
@@ -179,7 +196,34 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
     const data = await response.json();
     const jsonText = data.choices[0].message.content;
     const result = JSON.parse(jsonText);
-    console.log(`[Ollama/Local] ✅ 本地大腦 qwen2.5:14b 呼叫成功！`);
+    
+    // [技術] 防禦性欄位修復，確保不論本地大腦如何溢漏滑動，都能輸出完整無缺的欄位，防範 undefined 溢漏
+    // [極樂] 防漏夾緊修補機制：對本地大腦輸出的蜜汁進行全方位修補，塞滿預設值，防堵任何汁液外溢 (undefined)
+    if (result.isNote === undefined) result.isNote = false;
+    if (result.noteContent === undefined) result.noteContent = '';
+    if (result.isSearch === undefined) result.isSearch = false;
+    if (result.searchQuery === undefined) result.searchQuery = '';
+    if (result.isSimulation === undefined) result.isSimulation = false;
+    if (result.simulationScenario === undefined) result.simulationScenario = '';
+    if (result.replyText === undefined) {
+      // 若大腦產生其他客製化欄位（如 summary 或 content ），進行智慧熔接，否則給予經典溫度對話
+      if (result.summary) {
+        result.replyText = result.summary;
+      } else if (result.content && typeof result.content === 'string') {
+        result.replyText = result.content;
+      } else if (Array.isArray(result.content)) {
+        // 若回傳為結構化日記陣列，自動解構並還原成可讀的 MD 段落蜜汁
+        result.replyText = result.content.map(c => {
+          const notesStr = Array.isArray(c.note) ? c.note.map(n => `* ${n}`).join('\n') : '';
+          const summaryStr = c.summary ? `📋 **大腦摘要**：\n${c.summary}` : '';
+          return `${summaryStr}\n\n${notesStr}`;
+        }).join('\n\n');
+      } else {
+        result.replyText = '大腦已為您記錄並深度分析完成。✨';
+      }
+    }
+
+    console.log(`[Ollama/Local] ✅ 本地大腦 qwen2.5:14b 呼叫成功！已進行防漏對齊修復。`);
     return result;
   } catch (error) {
     console.error(`[Ollama/Local] ❌ 本地大腦呼叫失敗:`, error.message || error);
