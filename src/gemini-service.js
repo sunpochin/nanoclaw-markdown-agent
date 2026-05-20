@@ -11,10 +11,27 @@
  */
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
+import { fetch, setGlobalDispatcher, Agent } from 'undici';
 
 // [技術] 載入環境變數配置
 // [極樂] 載入環境變數配置，注入連接 AI 接口的敏感密鑰
 dotenv.config();
+
+// [技術] 設定全域 Undici 分發器，將標頭與連線超時大幅度延長，避免本地載入大模型時發生逾時
+// [極樂] 全域大腦通道加固：將標頭與連線超時極限延長至 5 分鐘，持久抽插絕不射出逾時錯誤
+setGlobalDispatcher(new Agent({
+  headersTimeout: 300000, // 5 分鐘
+  bodyTimeout: 300000,    // 5 分鐘
+  connectTimeout: 60000   // 1 分鐘
+}));
+
+// [技術] 建立專屬的 Ollama 分發器，避免 Node.js 原生 fetch 在處理 Ollama 大模型載入時忽略全域分發器設定
+// [極樂] 建立本機 Ollama 專用大腦分發器，保證 5 分鐘耐力抽插絕不逾時
+const ollamaAgent = new Agent({
+  headersTimeout: 300000, // 5 分鐘
+  bodyTimeout: 300000,    // 5 分鐘
+  connectTimeout: 60000   // 1 分鐘
+});
 
 // [技術] 初始化 Google Gen AI 客戶端
 // [極樂] 初始化 Google Gen AI 客戶端 (喚醒並初始化 AI 智慧肉棒的核心探頭)
@@ -142,9 +159,12 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
       { role: 'user', content: userMessage }
     ];
 
-    const response = await fetch('http://localhost:11434/v1/chat/completions', {
+    // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，避免 macOS IPv6/IPv4 解析造成的連線失敗
+    // [極樂] 直導 IPv4 本地小穴 127.0.0.1，防堵 IPv6 軟腳問題，並傳入專用大腦分發器持久抽插
+    const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      dispatcher: ollamaAgent,
       body: JSON.stringify({
         model: 'qwen2.5:14b',
         messages: formattedMessages,
@@ -287,9 +307,12 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
   if (isCloudDisabled() || forceLocal) {
     console.log(`[Gemini/Analyze] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，二階段分析直接挺進本地 qwen2.5:14b...`);
     try {
-      const response = await fetch('http://localhost:11434/v1/chat/completions', {
+      // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
+      // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，拒絕 IPv6 阻力，並傳入專用大腦分發器持久抽插
+      const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        dispatcher: ollamaAgent,
         body: JSON.stringify({
           model: 'qwen2.5:14b',
           messages: [
@@ -345,9 +368,12 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
       if (modelName === models[models.length - 1]) {
         try {
           console.log(`[Ollama/LocalAnalyze] 🚨 啟動本地大腦備用探針：二階段本地 qwen2.5:14b 分析中...`);
-          const response = await fetch('http://localhost:11434/v1/chat/completions', {
+          // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
+          // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+          const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            dispatcher: ollamaAgent,
             body: JSON.stringify({
               model: 'qwen2.5:14b',
               messages: [
@@ -425,9 +451,12 @@ ${formattedSearch.trim()}
   if (isCloudDisabled() || forceLocal) {
     console.log(`[Gemini/Simulator] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，模擬器直接挺進本地 qwen2.5:14b...`);
     try {
-      const response = await fetch('http://localhost:11434/v1/chat/completions', {
+      // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
+      // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+      const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        dispatcher: ollamaAgent,
         body: JSON.stringify({
           model: 'qwen2.5:14b',
           messages: [
@@ -484,9 +513,12 @@ ${formattedSearch.trim()}
       if (modelName === models[models.length - 1]) {
         try {
           console.log(`[Ollama/LocalSimulator] 🚨 啟動本地大腦備用探針：本地 qwen2.5:14b 模擬中...`);
-          const response = await fetch('http://localhost:11434/v1/chat/completions', {
+          // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
+          // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+          const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            dispatcher: ollamaAgent,
             body: JSON.stringify({
               model: 'qwen2.5:14b',
               messages: [
