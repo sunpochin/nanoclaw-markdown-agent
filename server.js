@@ -737,9 +737,16 @@ app.listen(PORT, () => {
 
 // ==========================================
 // 【自動降溫小天使 👼 (Auto-Cooler Daemon)】
-// 每 1 分鐘自動巡邏，偵測發熱怪獸並自動用冰棒冷卻，確保 Mac Mini 永遠保持冰涼！
+// [技術] 每 1 分鐘自動巡邏，針對特定非系統關鍵 Chrome 輔助進程進行 CPU 監控。
+//        當單一進程 CPU 超過 500%（適用於多核心 Apple Silicon 主機）且持續達 3 分鐘，執行自動降溫（Kill）。
+//        排除 node, ollama, ngrok 防範自殘與誤殺。
+// [極樂] 巡邏冷卻小天使 👼：每分鐘在敏感地帶巡視，尋找過度摩擦發熱（CPU > 500%）且持續超過 3 分鐘的野狗進程，
+//        使用魔法冰棒強行結束退火，完全排除 Ollama 智慧肉棒、Node 伺服器與 Ngrok 連接線等核心摩擦支柱。
 // ==========================================
 const AUTO_COOL_INTERVAL = 60 * 1000; // 每分鐘巡邏一次
+const CPU_SPIKE_THRESHOLD = 500; // 從 80% 大幅調高到 500% CPU，防止誤殺 macOS 多核心背景任務 (100% 代表佔滿單核)
+const SUSTAINED_SPIKE_LIMIT = 3; // 連續 3 分鐘超標才動手，避免誤殺短暫發熱的正常高負載任務
+const processCpuSpikeTracker = new Map(); // 追蹤進程 PID -> 連續超標次數
 
 setInterval(() => {
   exec('ps -Ao pcpu,pid,comm -r | head -n 6', (error, stdout, stderr) => {
@@ -750,13 +757,16 @@ setInterval(() => {
     
     const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
     
-    // 安全降溫白名單 (只會自動清理這些背景進程，不會誤殺使用者的重要工作)
+    // 安全降溫白名單 (只會自動清理這些背景網頁分頁輔助進程，排除 node, ollama, ngrok 防範自殘與誤殺)
     const SAFE_TO_KILL_PROCESSES = [
       'google chrome helper',
-      'ollama',
-      'node',
-      'ngrok'
+      'chrome helper',
+      'firefox helper',
+      'webcontent'
     ];
+    
+    // 用於記錄本次巡邏依然活躍且超標的 PID
+    const activeSpikedPids = new Set();
     
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
@@ -765,25 +775,36 @@ setInterval(() => {
       const path = parts.slice(2).join(' ');
       const name = path.substring(path.lastIndexOf('/') + 1).toLowerCase();
       
-      // 如果 CPU 超過 80% (狂暴發熱狀態)，且在安全清理名單中
-      if (cpu > 80) {
-        const isSafeToKill = SAFE_TO_KILL_PROCESSES.some(safeName => name.includes(safeName));
+      const isSafeToKill = SAFE_TO_KILL_PROCESSES.some(safeName => name.includes(safeName));
+      
+      // [技術] 判定是否超過 CPU 臨界點且為可自動清理進程
+      // [極樂] 大腦發熱判定：高於 500% CPU 且符合清理體位之野狗進程
+      if (cpu > CPU_SPIKE_THRESHOLD && isSafeToKill) {
+        activeSpikedPids.add(pid);
         
-        if (isSafeToKill) {
-          console.log(`[Auto-Cooler] 🚨 偵測到發熱怪獸！PID: ${pid} (${name}) 佔用 ${cpu}% CPU，啟動自動冷卻...`);
+        // 累加該進程的持續發熱次數
+        const currentSpikes = (processCpuSpikeTracker.get(pid) || 0) + 1;
+        processCpuSpikeTracker.set(pid, currentSpikes);
+        
+        console.log(`[Auto-Cooler] ⚠️ 偵測到高發熱進程：PID: ${pid} (${name}) 佔用 ${cpu}% CPU (連續第 ${currentSpikes} 次超標)`);
+        
+        // 若連續超標次數達到上限，啟動自動冷卻
+        if (currentSpikes >= SUSTAINED_SPIKE_LIMIT) {
+          console.log(`[Auto-Cooler] 🚨 進程 PID: ${pid} (${name}) 持續發熱超過 ${SUSTAINED_SPIKE_LIMIT} 分鐘，啟動自動冷卻...`);
           
           exec(`kill -9 ${pid}`, (killErr) => {
             if (killErr) {
               console.error(`[Auto-Cooler] ❌ 自動冷卻 PID ${pid} 失敗:`, killErr);
             } else {
               console.log(`[Auto-Cooler] ❄️ 已成功強制結束發熱進程 PID: ${pid} (${name})`);
+              processCpuSpikeTracker.delete(pid); // 清理追蹤器
               
-              // 主動發送 LINE 訊息通知柏青 (Push Message)
+              // 主動發送 LINE 訊息通知主人 (Push Message)
               lineClient.pushMessage({
                 to: SECURE_USER_ID,
                 messages: [{
                   type: 'text',
-                  text: `❄️ 報告主人！【巡邏小天使 👼】幫您自動降溫囉！\n\n剛剛發現調皮的進程正在瘋狂發熱：\n🔥 進程：${name}\n📌 PID：${pid}\n⚡ CPU 佔用：${cpu}%\n\n🛡️ 小天使已使用魔法冰棒將其退火結束，Mac Mini 現在冰冰涼涼的，非常安全唷！❄️`
+                  text: `❄️ 報告主人！【巡邏小天使 👼】幫您自動降溫囉！\n\n發現以下進程持續失控發熱達 ${SUSTAINED_SPIKE_LIMIT} 分鐘：\n🔥 進程：${name}\n📌 PID：${pid}\n⚡ 目前 CPU 佔用：${cpu}%\n\n🛡️ 小天使已使用魔法冰棒將其退火結束，Mac Mini 現在冰冰涼涼的，非常安全唷！❄️`
                 }]
               }).catch(pushErr => {
                 console.error('[Auto-Cooler] 傳送 LINE 警告訊息失敗:', pushErr.message || pushErr);
@@ -792,6 +813,14 @@ setInterval(() => {
           });
           break; // 一次只殺一個發熱進程，避免衝突
         }
+      }
+    }
+    
+    // [技術] 清理已降溫或已不存在的進程追蹤記錄，防範記憶體溢漏
+    // [極樂] 清理冷卻腺體：將已經不熱或已經退火的 PID 從記憶褶皺中抹除，防範記憶體溢漏
+    for (const trackedPid of processCpuSpikeTracker.keys()) {
+      if (!activeSpikedPids.has(trackedPid)) {
+        processCpuSpikeTracker.delete(trackedPid);
       }
     }
   });
