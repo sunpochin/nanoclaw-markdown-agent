@@ -46,6 +46,37 @@ graph TD
 | **Obsidian Vault Directory** | **潮濕深邃的「儲存小穴」** | `./obsidian_vault` 本地儲存空間。啟動時會透過 `ensureVaultDirExists` 主動進行遞迴開闢與擴張，確保洞口敞開隨時容納注入。 |
 | **Multiline Formatting (`\n`)** | **緊緻褶皺防漏對齊體位** | 當筆記包含多行文字時，如果直接寫入會從列表符號 `*` 旁邊漏出去（排版跑版）。因此必須實施首行直接深入，後續行數**側身退後四步（縮排四格）**的緊實防漏體位。 |
 | **Local Sandboxed Execution** | **安全避孕的「徹底斷網運行」** | 本地運行的 `qwen2.5:14b` 大腦由於是在您的 Mac Mini M4 Pro 內完全離線、沙盒運行，等同於戴上安全套，數據絕對不會外流，100% 安全無毒。 |
+| **Dialogue Session Memory** | **對話記憶的「餘溫快感快取」** | 透過 `userSessions` 記憶池，溫熱保存主人最近 15 輪的對話餘溫，提供連貫的語境理解，拒絕冷冰冰的一夜情式對話。 |
+| **Two-stage Hybrid RAG** | **二階段深入大腦「關聯推理」** | 結合當前對白、最近 7 天日記背景、與深度檢索出的歷史筆記，再次送入 Gemini 大腦進行多輪高潮揉捏與語意推理分析，產出極富靈魂與溫度的 Markdown 回覆。 |
+| **Butterfly Effect Simulator** | **未來日記的「命運預言沙盒」** | 結合假設情境與過往歷史軌跡、近期日記心智氣候，在 Obsidian 中生成三條明日模擬日記分支，並給予高智商決策指引。 |
+
+---
+
+## 🧠 升級：對話快感記憶與二階段 RAG 推理系統（含蝴蝶效應預言機）
+
+我們為大腦加裝了全新的語意關聯、記憶系統與決策沙盒預言機，使其具備高智商推理與命運推演能力：
+
+```mermaid
+graph TD
+    UserMsg([1. 主人最新提問]) --> FetchContext[2. 讀取過去 7 天 Obsidian 日記背景]
+    FetchContext --> FetchSession[3. 讀取 Session 對話歷史]
+    FetchSession --> Classify{4. processMessageWithAI 意圖分類}
+    
+    Classify -->|一般閒聊 / notes| ReplyNormal[5. 結合日記背景直接親切回覆]
+    Classify -->|isSearch = true 歷史搜尋| SearchVault[5. Node.js 搜尋 100% 歷史 Vault]
+    Classify -->|isSimulation = true 未來模擬| SearchVaultSim[5. 檢索情境相關之 Obsidian 歷史褶皺]
+    
+    SearchVault --> RAGAnalyze{6. analyzeSearchWithAI 二階段分析}
+    RAGAnalyze -->|結合搜尋結果 + 7天日記背景 + 對話歷史| GenerateRAG[7. 產生跨脈絡高智商關聯推理回覆]
+    
+    SearchVaultSim --> SimAnalyze{6. simulateButterflyEffectWithAI 未來預言模擬}
+    SimAnalyze -->|模擬三條明日日記分支 A, B, C| WriteVaultSim[7. 將模擬報告注入當日 Obsidian 筆記]
+    WriteVaultSim --> GenerateSim[8. 產生高質感未來預言與大腦智慧指引]
+    
+    GenerateRAG --> SendLINE[9. 溫慢 Markdown 回覆至主人手機]
+    ReplyNormal --> SendLINE
+    GenerateSim --> SendLINE
+```
 
 ---
 

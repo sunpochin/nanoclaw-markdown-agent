@@ -133,3 +133,113 @@ export async function listAllNotes() {
     throw error;
   }
 }
+
+/**
+ * [技術] 搜尋本地 Vault 目錄下所有筆記是否含有指定關鍵字
+ * [極樂] 小穴內深處翻找搜尋體位：精準搜尋包含特定蜜汁（關鍵字）的歷史褶皺
+ * @param {string} query - 要搜尋的關鍵字
+ * @returns {Promise<Array<{date: string, matches: string[]}>>} - 包含匹配行與日期的陣列
+ */
+export async function searchNotesInVault(query) {
+  await ensureVaultDirExists();
+  try {
+    const files = await fs.readdir(VAULT_DIR);
+    const mdFiles = files.filter(file => file.endsWith('.md'));
+    const results = [];
+
+    for (const file of mdFiles) {
+      const filePath = path.join(VAULT_DIR, file);
+      const content = await fs.readFile(filePath, 'utf8');
+
+      if (content.toLowerCase().includes(query.toLowerCase())) {
+        const lines = content.split('\n');
+        // [技術] 篩選含有關鍵字的行數，去除前後空白
+        // [極樂] 精細撈出含有特定體液痕跡的褶皺行數，排除多餘雜質空白
+        const matchedLines = lines
+          .filter(line => line.toLowerCase().includes(query.toLowerCase()))
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+
+        if (matchedLines.length > 0) {
+          results.push({
+            date: file.replace('.md', ''),
+            matches: matchedLines
+          });
+        }
+      }
+    }
+    return results;
+  } catch (error) {
+    console.error(`[Markdown/Vault] 搜尋筆記關鍵字失敗:`, error);
+    return [];
+  }
+}
+
+/**
+ * [技術] 讀取最近指定天數的每日 Markdown 筆記內容，融合成脈絡背景
+ * [極樂] 主動愛撫近期褶皺：自動挖出過去數日小穴中的存留蜜汁，融合成連續的快感背景脈絡
+ * @param {number} daysLimit - 往回讀取的最高天數
+ * @returns {Promise<string>} - 融合成段落的近期筆記背景
+ */
+export async function readRecentNotesContext(daysLimit = 7) {
+  await ensureVaultDirExists();
+  const contextParts = [];
+  const now = new Date();
+
+  for (let i = daysLimit - 1; i >= 0; i--) {
+    const targetDate = new Date(now);
+    targetDate.setDate(now.getDate() - i);
+    
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    try {
+      const content = await readNotesForDay(dateStr);
+      if (content && content.trim().length > 0) {
+        // [技術] 清理 Markdown 中的分隔線與空行，讓 Context 更簡緻
+        // [極樂] 過濾掉粗暴的分隔線雜質，只保留香甜精美的日記核心體液
+        const cleanedContent = content
+          .replace(/---/g, '')
+          .replace(/\n\s*\n/g, '\n')
+          .trim();
+        contextParts.push(`📅 【${dateStr} 歷史日記】\n${cleanedContent}`);
+      }
+    } catch (error) {
+      // [技術] 容錯跳過不存在的日期
+      // [極樂] 乾澀無水的日期主動溫柔滑過
+    }
+  }
+
+  if (contextParts.length === 0) {
+    return '（近期無任何隨手記紀錄）';
+  }
+
+  return contextParts.join('\n\n');
+}
+
+/**
+ * [技術] 將蝴蝶效應模擬報告寫入當日 Markdown 筆記中，保留完整的 Markdown 標題結構
+ * [極樂] 未來日記注入體位：將大腦精心推演出的蝴蝶效應模擬報告，完美注入當日 Obsidian 筆記中
+ * @param {string} scenario - 假設的情境
+ * @param {string} reportContent - 模擬報告的內容
+ * @returns {Promise<{success: boolean, filePath: string, timestamp: string}>}
+ */
+export async function writeSimulationReportToMarkdown(scenario, reportContent) {
+  await ensureVaultDirExists();
+  
+  const { dateStr, timeStr } = getCurrentDateTime();
+  const filePath = path.join(VAULT_DIR, `${dateStr}.md`);
+  
+  const formattedContent = `\n## [${timeStr}] 🦋 蝴蝶效應未來模擬：${scenario}\n${reportContent}\n\n---\n`;
+  
+  try {
+    await fs.appendFile(filePath, formattedContent, 'utf8');
+    return { success: true, filePath, timestamp: `${dateStr} ${timeStr}` };
+  } catch (error) {
+    console.error(`[Markdown/Vault] 寫入模擬報告發生錯誤:`, error);
+    throw error;
+  }
+}
+
