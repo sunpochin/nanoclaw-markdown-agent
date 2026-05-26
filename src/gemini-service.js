@@ -49,8 +49,26 @@ function isCloudDisabled() {
 }
 
 function triggerCircuitBreaker(error) {
-  const errMsg = error?.message || '';
-  if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('Quota exceeded')) {
+  let errMsg = '';
+  if (typeof error === 'string') {
+    errMsg = error;
+  } else if (error && error.message) {
+    errMsg = error.message;
+  } else if (error) {
+    try {
+      errMsg = JSON.stringify(error);
+    } catch (e) {
+      errMsg = '';
+    }
+  }
+
+  const has429 = errMsg.includes('429') || 
+                  errMsg.includes('RESOURCE_EXHAUSTED') || 
+                  errMsg.includes('quota') || 
+                  errMsg.includes('Quota exceeded') ||
+                  (error && (error.status === 'RESOURCE_EXHAUSTED' || error.code === 429));
+
+  if (has429) {
     console.warn(`[AI/Breaker] 🚨 偵測到雲端額度耗盡 (429/Quota)，自動啟動熔斷器！接下來 3 分鐘內將直接走本機大腦。`);
     cloudDisabledUntil = Date.now() + BREAKER_COOLDOWN_MS;
   }
@@ -740,6 +758,10 @@ ${instructionPrefix}
       triggerCircuitBreaker(error);
       console.warn(`[Gemini/Vision] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
+        const errStr = error.message || JSON.stringify(error);
+        if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
+          throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+        }
         throw error;
       }
     }
@@ -822,8 +844,12 @@ export async function processAudioWithAI(audioBase64, mimeType) {
       return result;
     } catch (error) {
       triggerCircuitBreaker(error);
-      console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音分析失敗，原因:`, error.message || error);
+      console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音 analysis 失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
+        const errStr = error.message || JSON.stringify(error);
+        if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
+          throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+        }
         throw error;
       }
     }

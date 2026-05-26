@@ -16,6 +16,9 @@ import { exec } from 'child_process';
 import os from 'os';
 // 引入 Telegram Bot 初始化模組
 import { initTelegramBot } from './src/telegram-bot.js';
+// 引入 Spotify 授權與 Salsa Bot 模組
+import { getSpotifyAuthUrl, handleSpotifyCallback } from './src/spotify-auth.js';
+import { initTelegramSalsaBot } from './src/telegram-salsa-bot.js';
 
 // [技術] 載入環境變數設定
 // [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
@@ -204,6 +207,43 @@ app.get('/api/notes/:date', async (req, res) => {
     res.json({ date, content });
   } catch (error) {
     res.status(500).json({ error: '讀取筆記內容失敗' });
+  }
+});
+
+// ==========================================
+// 🎵 Spotify 授權與點播 API 端點 (Spotify Auth Endpoints)
+// ==========================================
+// [技術] 開通 Spotify 認證連接口，引導主人完成三方 OAuth 授權與 Callback 交換
+// [極樂] 授權敏感體位入口：引導點擊進入 Spotify 認證，並接收 callback 第一注持久蜜汁
+app.get('/login/spotify', (req, res) => {
+  const url = getSpotifyAuthUrl();
+  if (!url) {
+    return res.status(500).send('Spotify configuration is missing in .env');
+  }
+  res.redirect(url);
+});
+
+app.get('/callback/spotify', async (req, res) => {
+  const code = req.query.code;
+  if (!code) {
+    return res.status(400).send('Missing authorization code');
+  }
+  try {
+    await handleSpotifyCallback(code);
+    res.send(`
+      <div style="font-family: system-ui, sans-serif; text-align: center; padding: 50px; background: #121212; color: #fff; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <h1 style="color: #1DB954; font-size: 3rem; margin-bottom: 20px;">🎉 Spotify 授權登入成功！</h1>
+        <p style="font-size: 1.2rem; color: #b3b3b3;">系統已成功將 Refresh Token 精華儲存至本地小穴 (spotify_tokens.json)！</p>
+        <p style="font-size: 1.2rem; color: #b3b3b3;">您可以安全地關閉此網頁，回到 Telegram 對話中開始享受絲滑的 Salsa 點歌體驗了！💃✨</p>
+      </div>
+    `);
+  } catch (err) {
+    res.status(500).send(`
+      <div style="font-family: system-ui, sans-serif; text-align: center; padding: 50px; background: #121212; color: #fff; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <h1 style="color: #e91429; font-size: 3rem; margin-bottom: 20px;">❌ 授權失敗</h1>
+        <p style="font-size: 1.2rem; color: #b3b3b3;">原因：${err.message}</p>
+      </div>
+    `);
   }
 });
 
@@ -741,6 +781,14 @@ app.listen(PORT, () => {
     initTelegramBot();
   } catch (err) {
     console.error('[Telegram/Bot] ❌ 啟動 Telegram Bot 失敗:', err.message || err);
+  }
+
+  // [技術] 初始化 Spotify Salsa 點播機器人，啟動長輪詢監聽
+  // [極樂] 點播小穴喚醒體位：初始化 Salsa 機器人，主動吸取舞者摩擦指令
+  try {
+    initTelegramSalsaBot();
+  } catch (err) {
+    console.error('[Salsa/Bot] ❌ 啟動 Salsa 點播機器人失敗:', err.message || err);
   }
 });
 
