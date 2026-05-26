@@ -119,6 +119,16 @@ export function initTelegramBot() {
 
   // 啟動 Telegram Bot (長輪詢模式)
   const bot = new TelegramBot(token, { polling: true });
+
+  // 註冊輪詢與系統異常監聽器，防止網路中斷引發生理痙攣導致程序崩潰 (Exception Handling)
+  bot.on('polling_error', (error) => {
+    console.error('[Telegram/Bot] 🔄 輪詢錯誤 (Exception Captured):', error.message || error);
+  });
+
+  bot.on('error', (error) => {
+    console.error('[Telegram/Bot] ❌ 系統錯誤 (Exception Captured):', error.message || error);
+  });
+
   console.log('[Telegram/Bot] 🚀 Telegram Bot 已啟動，並在背景以長輪詢監聽中...');
 
   // 監聽傳入的訊息
@@ -209,7 +219,10 @@ ${processList}
 💡 若需強制結束某個發熱進程，請直接輸入：
 \`#kill {PID} {進程名}\``;
 
-          return bot.sendMessage(chatId, report, { parse_mode: 'Markdown' });
+          return bot.sendMessage(chatId, report, { parse_mode: 'Markdown' }).catch((err) => {
+            console.warn('[Telegram/Bot] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+            return bot.sendMessage(chatId, report);
+          });
         });
       } catch (err) {
         return bot.sendMessage(chatId, '❌ 獲取系統狀態時發生異常。');
@@ -367,7 +380,10 @@ ${processList}
         appendToTelegramSession(chatId, 'user', text);
         appendToTelegramSession(chatId, 'model', decoratedText);
 
-        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' }).catch((err) => {
+          console.warn('[Telegram/Bot] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+          return bot.sendMessage(chatId, decoratedText);
+        });
       }
 
       // B. 判定為搜尋歷史，啟動二階段 RAG 分析
@@ -399,7 +415,10 @@ ${processList}
         appendToTelegramSession(chatId, 'user', text);
         appendToTelegramSession(chatId, 'model', decoratedText);
 
-        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' }).catch((err) => {
+          console.warn('[Telegram/Bot] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+          return bot.sendMessage(chatId, decoratedText);
+        });
       }
 
       // C. 判定為假設性蝴蝶效應模擬
@@ -435,7 +454,10 @@ ${processList}
         appendToTelegramSession(chatId, 'user', text);
         appendToTelegramSession(chatId, 'model', decoratedText);
 
-        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' }).catch((err) => {
+          console.warn('[Telegram/Bot] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+          return bot.sendMessage(chatId, decoratedText);
+        });
       }
 
       // D. 一般對話閒聊
@@ -451,7 +473,10 @@ ${processList}
       appendToTelegramSession(chatId, 'user', text);
       appendToTelegramSession(chatId, 'model', decoratedText);
 
-      return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, decoratedText, { parse_mode: 'Markdown' }).catch((err) => {
+        console.warn('[Telegram/Bot] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+        return bot.sendMessage(chatId, decoratedText);
+      });
     } catch (err) {
       console.error('[Telegram/Bot] 🧠 智慧通道處理發生錯誤:', err);
       return bot.sendMessage(chatId, `❌ 抱歉，處理智慧訊息時發生錯誤：${err.message || err}`);

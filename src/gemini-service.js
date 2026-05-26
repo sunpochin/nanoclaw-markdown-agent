@@ -247,6 +247,10 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
  * @returns {string} - 'local' 或 'cloud'
  */
 function smartRouteBrain(message) {
+  // 防禦性類型校驗，避免傳入空值或非字串引發乾磨暴斃 (Exception Handling)
+  if (!message || typeof message !== 'string') {
+    return 'local';
+  }
   const text = message.trim();
 
   // 快捷指令或控制代碼直接本地處理
@@ -659,9 +663,12 @@ export async function processImageWithAI(imageBase64, mimeType, customPrompt = '
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
 
+  // 對 customPrompt 進行字元過濾與安全清洗，防止反單引號與大括號變數注入 (Prompt Injection)
+  const sanitizedPrompt = customPrompt ? customPrompt.replace(/[`\${}]/g, '') : '';
+
   // 根據是否有自訂提示詞，動態調整系統引導指令，以最貼切地符合主人的查詢與分析需求
-  const instructionPrefix = customPrompt 
-    ? `您是一位極具智慧、高品質的 Markdown 影像辨識與分析助理。\n您的工作是根據使用者提供的特定指令或問題，深度分析使用者發送的照片，並將詳細的分析與回答內容整理為高品質的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。\n\n【特別要求】：請務必針對使用者的問題/指令「${customPrompt}」進行深度解答與分析，並將其詳細呈現在 markdown 筆記與回覆中。`
+  const instructionPrefix = sanitizedPrompt 
+    ? `您是一位極具智慧、高品質的 Markdown 影像辨識與分析助理。\n您的工作是根據使用者提供的特定指令或問題，深度分析使用者發送的照片，並將詳細的分析與回答內容整理為高品質的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。\n\n【特別要求】：請務必針對使用者的問題/指令「${sanitizedPrompt}」進行深度解答與分析，並將其詳細呈現在 markdown 筆記與回覆中。`
     : `您是一位極具智慧、高品質的 Markdown 影像辨識與 OCR 助理。\n您的工作是分析使用者發送的照片（可能是實體收據、發票、手寫筆記、白板、書籍頁面或螢幕截圖），執行高精準度的文字提取 (OCR)，並將提取的內容整理成結構化、美觀的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。`;
 
   const IMAGE_SYSTEM_INSTRUCTION = `
