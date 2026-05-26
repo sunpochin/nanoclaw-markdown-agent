@@ -257,7 +257,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
  * @param {string} customPrompt - 主人自訂指令
  * @returns {Promise<object>} 結構化 OCR 結果
  */
-async function processImageWithLocalOllama(imageBase64, mimeType, customPrompt = '') {
+export async function processImageWithLocalOllama(imageBase64, mimeType, customPrompt = '') {
   console.log(`[Ollama/LocalVision] 🚨 啟動本地視覺大腦：正在呼叫本機 qwen2.5vl:7b...`);
   try {
     const promptText = customPrompt 
