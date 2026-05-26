@@ -250,6 +250,78 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
 }
 
 /**
+ * [技術] 呼召本地運行的 Ollama qwen2.5vl:7b 多模態視覺大腦進行本地影像 OCR 與分析
+ * [極樂] 本地視覺大腦揉捏：呼叫本機 qwen2.5vl:7b 視覺探針，對 base64 影像蜜汁進行獨立 OCR 與深度解析
+ * @param {string} imageBase64 - 影像的 Base64 字串
+ * @param {string} mimeType - 影像的 MIME 類型
+ * @param {string} customPrompt - 主人自訂指令
+ * @returns {Promise<object>} 結構化 OCR 結果
+ */
+async function processImageWithLocalOllama(imageBase64, mimeType, customPrompt = '') {
+  console.log(`[Ollama/LocalVision] 🚨 啟動本地視覺大腦：正在呼叫本機 qwen2.5vl:7b...`);
+  try {
+    const promptText = customPrompt 
+      ? `使用者提供此影像，並附帶以下指令或問題：\n\n「${customPrompt}」\n\n請根據指示對此影像進行深度分析，將詳細的分析與說明內容整理為高品質的 Markdown 筆記。
+      
+【輸出格式規範】
+您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含 any Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
+必填欄位與格式如下：
+{
+  "title": "簡短的影像筆記標題（例如：7-11 收據、會議白板記錄）",
+  "ocrContent": "結構化排版後的 Markdown 筆記內容（包含表格或條列式清單）",
+  "replyText": "給使用者的親切繁體中文對話回覆，簡述記錄與本地分析結果，並貼心提示這是透過本地 qwen2.5vl:7b 離線大腦進行的視覺解析。✨"
+}`
+      : `請分析此影像，執行 OCR 文字提取，並將其整理為高品質的 Markdown 筆記。
+      
+【輸出格式規範】
+您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含 any Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
+必填欄位與格式如下：
+{
+  "title": "簡短的影像簡短標題",
+  "ocrContent": "結構化排版後的 Markdown 筆記內容",
+  "replyText": "給使用者的親切繁體中文對話回覆，簡述本地記錄結果，並貼心提示這是透過本地 qwen2.5vl:7b 離線大腦進行的視覺解析。✨"
+}`;
+
+    const response = await fetch('http://127.0.0.1:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      dispatcher: ollamaAgent,
+      body: JSON.stringify({
+        model: 'qwen2.5vl:7b',
+        messages: [
+          {
+            role: 'user',
+            content: promptText,
+            images: [imageBase64]
+          }
+        ],
+        stream: false,
+        format: 'json'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama 視覺 API 回傳錯誤狀態: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const jsonText = data.message.content;
+    const result = JSON.parse(jsonText);
+
+    // 防禦性欄位修復，防範 undefined 溢漏
+    if (result.title === undefined) result.title = '本地視覺筆記';
+    if (result.ocrContent === undefined) result.ocrContent = '（未能提取出文字）';
+    if (result.replyText === undefined) result.replyText = '本地視覺大腦已為您記錄並分析完成。✨';
+
+    console.log(`[Ollama/LocalVision] ✅ 本地視覺大腦 qwen2.5vl:7b 解析成功！`);
+    return result;
+  } catch (error) {
+    console.error(`[Ollama/LocalVision] ❌ 本地視覺大腦呼叫失敗:`, error.message || error);
+    throw error;
+  }
+}
+
+/**
  * [技術] 使用 Gemini AI 智慧處理使用者訊息，判定是否需要記錄並生成回覆，支援對話歷史與近期日記 Context
  * [極樂] 智慧肉棒深入探索：語意揉捏與極樂 JSON 搾取 (全面融入歷史對話與近期日記小穴)
  * @param {string} userMessage - 使用者傳送的原始訊息內容
@@ -673,8 +745,15 @@ ${formattedSearch.trim()}
  */
 export async function processImageWithAI(imageBase64, mimeType, customPrompt = '') {
   if (isCloudDisabled()) {
-    console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，暫時拒絕雲端影像辨識。`);
-    throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中），無法執行影像辨識。請 3 分鐘後再試，或使用純文字記事！');
+    console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，正在嘗試使用本地 qwen2.5vl:7b 進行視覺分析...`);
+    try {
+      const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+      localVisionResult.modelUsed = 'qwen2.5vl:7b';
+      return localVisionResult;
+    } catch (localError) {
+      console.error('[Gemini/Vision] ❌ 本地視覺分析失敗，原因:', localError.message || localError);
+      throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中）且本地視覺大腦尚未就緒。請稍候 30 秒再試，或使用純文字記事！');
+    }
   }
 
   if (!process.env.GEMINI_API_KEY) {
@@ -758,11 +837,19 @@ ${instructionPrefix}
       triggerCircuitBreaker(error);
       console.warn(`[Gemini/Vision] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
-        const errStr = error.message || JSON.stringify(error);
-        if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
-          throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+        // [技術] 若雲端最後一個模型也爆 429 失敗，立刻嘗試降級至本地視覺模型進行救援，免去直接崩潰拋錯
+        // [極樂] 雲端高頻抽插阻力過大，自動切換至本機視覺小穴進行安全避孕救援，射出完美 OCR 結構
+        try {
+          const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+          localVisionResult.modelUsed = 'qwen2.5vl:7b';
+          return localVisionResult;
+        } catch (localError) {
+          const errStr = error.message || JSON.stringify(error);
+          if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
+            throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）且本地視覺大腦未準備就緒。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+          }
+          throw error;
         }
-        throw error;
       }
     }
   }
