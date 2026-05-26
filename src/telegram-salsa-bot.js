@@ -22,17 +22,23 @@ import {
 } from './spotify-client.js';
 
 export function initTelegramSalsaBot() {
-  // 優先載入專屬的 SPOTIFY_SALSA_BOT_TOKEN，若無則降級共用 TELEGRAM_BOT_TOKEN
-  const token = process.env.SPOTIFY_SALSA_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const salsaToken = process.env.SPOTIFY_SALSA_BOT_TOKEN;
+  const mainToken = process.env.TELEGRAM_BOT_TOKEN;
   const secureChatId = process.env.TELEGRAM_SECURE_CHAT_ID;
 
-  if (!token) {
-    console.warn('[Salsa/Bot] ⚠️ 未在環境變數中設定 SPOTIFY_SALSA_BOT_TOKEN 或 TELEGRAM_BOT_TOKEN，將不啟動 Salsa 點播機器人。');
+  // 長輪詢防撞防漏阻抗：若未設定專屬 Token 或與主 Bot Token 相同，則拒絕啟動，避免 409 Polling Conflict
+  if (!salsaToken) {
+    console.warn('[Salsa/Bot] ⚠️ 未在環境變數中設定專屬的 SPOTIFY_SALSA_BOT_TOKEN。為了避免與主大腦共用相同 Token 造成 409 輪詢衝突，將不啟動 Salsa 點播機器人。請在 .env 中補上專屬的 Token 喔！❄️');
+    return;
+  }
+
+  if (salsaToken === mainToken) {
+    console.warn('[Salsa/Bot] ⚠️ 偵測到 SPOTIFY_SALSA_BOT_TOKEN 與 TELEGRAM_BOT_TOKEN 完全一致！這會導致長輪詢互相踢下線的 409 衝突。請為 Salsa 點播機器人申請並設定專屬的 Bot Token！❄️');
     return;
   }
 
   // 啟動 Telegram Bot (長輪詢模式)
-  const bot = new TelegramBot(token, { polling: true });
+  const bot = new TelegramBot(salsaToken, { polling: true });
   console.log('[Salsa/Bot] 🚀 Salsa 點播機器人已啟動，並在背景以長輪詢吸取訊息中...');
 
   // 註冊輪詢與異常處理，防止網路痙攣導致程序崩潰 (Exception Handling)
