@@ -14,13 +14,15 @@ import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNote
 import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSearchWithAI, simulateButterflyEffectWithAI } from './src/gemini-service.js';
 import { exec } from 'child_process';
 import os from 'os';
+// 引入 Telegram Bot 初始化模組
+import { initTelegramBot } from './src/telegram-bot.js';
 
 // [技術] 載入環境變數設定
 // [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // [技術] LINE SDK 的連接配置
 // [極樂] LINE SDK 的連接配置 (設定與 LINE 恥肉外網接口對接的專屬配置)
@@ -78,7 +80,7 @@ function appendToUserSession(userId, role, text) {
     role: role === 'model' ? 'model' : 'user',
     parts: [{ text: text }]
   });
-  
+
   // 維持最後 15 輪對話（共 30 筆訊息）
   if (history.length > MAX_SESSION_LIMIT * 2) {
     history.splice(0, history.length - MAX_SESSION_LIMIT * 2);
@@ -125,7 +127,7 @@ async function showLineLoading(userId, seconds = 20) {
 function formatThinkingBlock({ isLocal, elapsedSec, intent, contextCharCount, searchMatchesCount, searchKeyword, modelUsed }) {
   const modelName = modelUsed ? (modelUsed.includes('qwen') ? `🤖 本地 Qwen2.5:14b` : `☁️ 雲端 ${modelUsed}`) : (isLocal ? '🤖 本地 Qwen2.5:14b' : '☁️ 雲端 Gemini');
   const contextStatus = contextCharCount > 0 ? `📅 已讀取過去 7 日日記背景 (${contextCharCount} 字)` : '📅 無日記背景';
-  
+
   let searchStatus = '';
   if (searchKeyword) {
     const matchesStr = searchMatchesCount !== undefined ? `，尋獲 ${searchMatchesCount} 筆軌跡` : '';
@@ -194,11 +196,11 @@ app.get('/api/notes/:date', async (req, res) => {
   try {
     const { date } = req.params;
     const content = await readNotesForDay(date);
-    
+
     if (content === null) {
       return res.status(404).json({ error: '找不到該日期的筆記檔案' });
     }
-    
+
     res.json({ date, content });
   } catch (error) {
     res.status(500).json({ error: '讀取筆記內容失敗' });
@@ -237,7 +239,7 @@ async function handleLineEvent(event) {
       const stream = response.body;
       // 動態獲取圖片的 MIME 類型 (例如 image/png, image/jpeg)，避免硬編碼導致格式解析錯誤
       const mimeType = response.headers['content-type'] || 'image/jpeg';
-      
+
       // [技術] 將 Stream 讀取並轉換為 Buffer
       // [極樂] 將 Stream 蜜汁凝聚成 Buffer 精華 (耐心接住小穴中一滴滴流出的溫熱粘膩蜜汁)
       const chunks = [];
@@ -246,15 +248,15 @@ async function handleLineEvent(event) {
       }
       const imageBuffer = Buffer.concat(chunks); // 蜜汁大融合，攪拌濃縮成完整的 Buffer 蜜汁精華
       const imageBase64 = imageBuffer.toString('base64'); // 昇華為純淨白皙的 base64 養分
-      
+
       // 3. 呼叫 Gemini 進行影像 OCR 與排版整理 (傳入動態獲取的 MIME 類型)
       const ocrResult = await processImageWithAI(imageBase64, mimeType);
       console.log(`[LINE/Webhook] 📸 影像 OCR 分析完成: "${ocrResult.title}"`);
-      
+
       // 4. 將排版好的 Markdown 內容寫入本地筆記
       const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
       await writeNoteToMarkdown(noteContent);
-      
+
       // 5. 回覆使用者解析結果
       return lineClient.replyMessage({
         replyToken,
@@ -362,7 +364,7 @@ async function handleLineEvent(event) {
         // 解析進程輸出
         const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
         let processList = '';
-        
+
         lines.forEach(line => {
           const parts = line.trim().split(/\s+/);
           const cpu = parts[0];
@@ -370,7 +372,7 @@ async function handleLineEvent(event) {
           const pid = parts[2];
           const path = parts.slice(3).join(' ');
           const name = path.substring(path.lastIndexOf('/') + 1);
-          
+
           const isHot = parseFloat(cpu) > 10;
           const statusIcon = isHot ? '🔥' : '❄️';
           processList += `${statusIcon} [CPU: ${cpu}% | RAM: ${mem}%] PID: ${pid}\n   ↳ 🧬 ${name}\n\n`;
@@ -382,7 +384,7 @@ async function handleLineEvent(event) {
         const usedMemGB = (totalMemGB - freeMemGB).toFixed(1);
         const memPercent = ((usedMemGB / totalMemGB) * 100).toFixed(0);
         const load = os.loadavg();
-        
+
         const statusReport = `🖥️ 【Mac Mini M4 Pro 運行報告】
         
 🔥 系統發熱進程 Top 5：
@@ -428,15 +430,15 @@ ${processList}
     const match = userMessage.match(killRegex);
     const pid = match[1];
     const name = match[2] || '未指定名稱';
-    
+
     console.log(`[LINE/Webhook] ⚔️ 觸發遠端冷卻：正在強制結束進程 PID ${pid} (${name})`);
-    
+
     try {
       exec(`kill -9 ${pid}`, (error, stdout, stderr) => {
-        const replyText = error 
+        const replyText = error
           ? `❌ 強制結束進程 PID ${pid} 失敗！原因可能是權限不足或該進程已不存在。`
           : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦小穴已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;
-          
+
         return lineClient.replyMessage({
           replyToken,
           messages: [{
@@ -533,7 +535,7 @@ ${processList}
   if (match) {
     const noteText = match[2].trim();
     console.log(`[LINE/Webhook] ⚡ 觸發快速通道：準備直接寫入筆記 "${noteText}"`);
-    
+
     try {
       await writeNoteToMarkdown(noteText);
       return lineClient.replyMessage({
@@ -562,7 +564,7 @@ ${processList}
     const startTime = Date.now();
 
     const chatHistory = getUserSessionHistory(userId);
-    
+
     // [技術] 主動讀取過去 7 天的 Obsidian 每日隨手記作為即時生活背景
     // [極樂] 主動挖出過去 7 天的小穴存留蜜汁，作為當前大腦摩擦的事實脈絡背景
     const recentNotesContext = await readRecentNotesContext(7);
@@ -578,7 +580,7 @@ ${processList}
     if (aiResult.isNote && aiResult.noteContent) {
       console.log(`[LINE/Webhook] ➡️ 智慧通道：將提取內容寫入 Markdown 筆記 "${aiResult.noteContent}"`);
       await writeNoteToMarkdown(aiResult.noteContent);
-      
+
       const thinkingHeader = formatThinkingBlock({
         isLocal: isLocalMode,
         elapsedSec: initialElapsedSec,
@@ -733,6 +735,13 @@ app.listen(PORT, () => {
   console.log(`[LINE/Webhook] 本地 Webhook 端點: http://localhost:${PORT}/callback`);
   console.log(`[LINE/Webhook] 請確認已安裝並使用 ngrok 穿透進行 LINE 平台對接`);
   console.log('=============================================\n');
+
+  // 初始化 Telegram Bot 隨手助理服務，啟動長輪詢監聽
+  try {
+    initTelegramBot();
+  } catch (err) {
+    console.error('[Telegram/Bot] ❌ 啟動 Telegram Bot 失敗:', err.message || err);
+  }
 });
 
 // ==========================================
@@ -754,9 +763,9 @@ setInterval(() => {
       console.error('[Auto-Cooler] 巡邏時發生錯誤:', error);
       return;
     }
-    
+
     const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
-    
+
     // 安全降溫白名單 (只會自動清理這些背景網頁分頁輔助進程，排除 node, ollama, ngrok 防範自殘與誤殺)
     const SAFE_TO_KILL_PROCESSES = [
       'google chrome helper',
@@ -764,41 +773,41 @@ setInterval(() => {
       'firefox helper',
       'webcontent'
     ];
-    
+
     // 用於記錄本次巡邏依然活躍且超標的 PID
     const activeSpikedPids = new Set();
-    
+
     for (const line of lines) {
       const parts = line.trim().split(/\s+/);
       const cpu = parseFloat(parts[0]);
       const pid = parts[1];
       const path = parts.slice(2).join(' ');
       const name = path.substring(path.lastIndexOf('/') + 1).toLowerCase();
-      
+
       const isSafeToKill = SAFE_TO_KILL_PROCESSES.some(safeName => name.includes(safeName));
-      
+
       // [技術] 判定是否超過 CPU 臨界點且為可自動清理進程
       // [極樂] 大腦發熱判定：高於 500% CPU 且符合清理體位之野狗進程
       if (cpu > CPU_SPIKE_THRESHOLD && isSafeToKill) {
         activeSpikedPids.add(pid);
-        
+
         // 累加該進程的持續發熱次數
         const currentSpikes = (processCpuSpikeTracker.get(pid) || 0) + 1;
         processCpuSpikeTracker.set(pid, currentSpikes);
-        
+
         console.log(`[Auto-Cooler] ⚠️ 偵測到高發熱進程：PID: ${pid} (${name}) 佔用 ${cpu}% CPU (連續第 ${currentSpikes} 次超標)`);
-        
+
         // 若連續超標次數達到上限，啟動自動冷卻
         if (currentSpikes >= SUSTAINED_SPIKE_LIMIT) {
           console.log(`[Auto-Cooler] 🚨 進程 PID: ${pid} (${name}) 持續發熱超過 ${SUSTAINED_SPIKE_LIMIT} 分鐘，啟動自動冷卻...`);
-          
+
           exec(`kill -9 ${pid}`, (killErr) => {
             if (killErr) {
               console.error(`[Auto-Cooler] ❌ 自動冷卻 PID ${pid} 失敗:`, killErr);
             } else {
               console.log(`[Auto-Cooler] ❄️ 已成功強制結束發熱進程 PID: ${pid} (${name})`);
               processCpuSpikeTracker.delete(pid); // 清理追蹤器
-              
+
               // 主動發送 LINE 訊息通知主人 (Push Message)
               lineClient.pushMessage({
                 to: SECURE_USER_ID,
@@ -815,7 +824,7 @@ setInterval(() => {
         }
       }
     }
-    
+
     // [技術] 清理已降溫或已不存在的進程追蹤記錄，防範記憶體溢漏
     // [極樂] 清理冷卻腺體：將已經不熱或已經退火的 PID 從記憶褶皺中抹除，防範記憶體溢漏
     for (const trackedPid of processCpuSpikeTracker.keys()) {

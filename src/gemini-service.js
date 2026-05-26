@@ -240,7 +240,67 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
  * @param {boolean} forceLocal - 是否強制使用本地大腦
  * @returns {Promise<object>}
  */
+/**
+ * [技術] 智能分流決策器：根據訊息字數與關鍵字，秒級判定該路由至本地大腦還是雲端大腦
+ * [極樂] 大腦分流敏感帶：分析訊息形體長短，決定由本地 Qwen 溫熱代勞，還是深入雲端 Gemini 高頻抽插
+ * @param {string} message - 使用者訊息
+ * @returns {string} - 'local' 或 'cloud'
+ */
+function smartRouteBrain(message) {
+  // 防禦性類型校驗，避免傳入空值或非字串引發乾磨暴斃 (Exception Handling)
+  if (!message || typeof message !== 'string') {
+    return 'local';
+  }
+  const text = message.trim();
+
+  // 快捷指令或控制代碼直接本地處理
+  if (text.startsWith('/') || text.startsWith('#')) {
+    return 'local';
+  }
+
+  // 快速記事通道前綴（記：、記錄：）直接本地處理
+  const prefixRegex = /^(記|記錄|記下來|memo|Memo)[:：]/i;
+  if (prefixRegex.test(text)) {
+    return 'local';
+  }
+
+  // 字數小於 20 字，排除假設性未來模擬詞彙，直接走本地大腦
+  if (text.length < 20) {
+    const simulationKeywords = ['如果', '假設', '假設性', '要是', '若我'];
+    const hasSimKeyword = simulationKeywords.some(kw => text.includes(kw));
+    if (!hasSimKeyword) {
+      return 'local';
+    }
+  }
+
+  // 字數介於 20 到 40 字，且不含複雜程式碼、學術或分析關鍵字，走本地大腦
+  if (text.length >= 20 && text.length <= 40) {
+    const cloudKeywords = ['代碼', '程式', '程式碼', 'code', 'python', 'javascript', '解釋', '分析', '研究', '深度', '翻譯', '寫一篇', '寫一個'];
+    const hasCloudKeyword = cloudKeywords.some(kw => text.toLowerCase().includes(kw));
+    if (!hasCloudKeyword) {
+      const simulationKeywords = ['如果', '假設', '假設性', '要是', '若我'];
+      const hasSimKeyword = simulationKeywords.some(kw => text.includes(kw));
+      if (!hasSimKeyword) {
+        return 'local';
+      }
+    }
+  }
+
+  // 其餘情況（字數大於 40 字，或具備複雜任務特徵）走雲端大腦
+  return 'cloud';
+}
+
 export async function processMessageWithAI(userMessage, chatHistory = [], recentNotesContext = '', forceLocal = false) {
+  // [技術] 智能分流決策：若非強制模式，進行動態路由判定
+  // [極樂] 大腦分流：若使用者沒強制點名，自動偵測是否可由本地大腦溫熱代勞，省下雲端 API 摩擦次數
+  if (!forceLocal && !isCloudDisabled()) {
+    const route = smartRouteBrain(userMessage);
+    if (route === 'local') {
+      console.log(`[SmartRouter] ⚡ 智能分流：偵測到此訊息適合本地處理，自動路由至本地大腦...`);
+      forceLocal = true;
+    }
+  }
+
   // [技術] 若強制本地模式啟動，或雲端處於熔斷狀態，繞過雲端直接呼叫 Ollama 本地大腦
   // [極樂] 🔒 避孕安全體位啟用：直接繞過雲端，以純本地 Qwen 2.5:14b 進行 100% 安全隱私抽插
   if (isCloudDisabled() || forceLocal) {
@@ -590,9 +650,10 @@ ${formattedSearch.trim()}
  * [極樂] 影像多模態 OCR 提取：將 Base64 白皙影像蜜汁送入大腦深處摩擦，搾出極樂 Markdown 筆記精華
  * @param {string} imageBase64 - 影像的 Base64 編碼字串
  * @param {string} mimeType - 影像的 MIME 類型
+ * @param {string} customPrompt - 使用者隨圖附帶的自訂提示詞/分析指令
  * @returns {Promise<object>}
  */
-export async function processImageWithAI(imageBase64, mimeType) {
+export async function processImageWithAI(imageBase64, mimeType, customPrompt = '') {
   if (isCloudDisabled()) {
     console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，暫時拒絕雲端影像辨識。`);
     throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中），無法執行影像辨識。請 3 分鐘後再試，或使用純文字記事！');
@@ -602,20 +663,26 @@ export async function processImageWithAI(imageBase64, mimeType) {
     throw new Error('未在環境變數中設定 GEMINI_API_KEY！');
   }
 
+  // 對 customPrompt 進行字元過濾與安全清洗，防止反單引號與大括號變數注入 (Prompt Injection)
+  const sanitizedPrompt = customPrompt ? customPrompt.replace(/[`\${}]/g, '') : '';
+
+  // 根據是否有自訂提示詞，動態調整系統引導指令，以最貼切地符合主人的查詢與分析需求
+  const instructionPrefix = sanitizedPrompt 
+    ? `您是一位極具智慧、高品質的 Markdown 影像辨識與分析助理。\n您的工作是根據使用者提供的特定指令或問題，深度分析使用者發送的照片，並將詳細的分析與回答內容整理為高品質的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。\n\n【特別要求】：請務必針對使用者的問題/指令「${sanitizedPrompt}」進行深度解答與分析，並將其詳細呈現在 markdown 筆記與回覆中。`
+    : `您是一位極具智慧、高品質的 Markdown 影像辨識與 OCR 助理。\n您的工作是分析使用者發送的照片（可能是實體收據、發票、手寫筆記、白板、書籍頁面或螢幕截圖），執行高精準度的文字提取 (OCR)，並將提取的內容整理成結構化、美觀的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。`;
+
   const IMAGE_SYSTEM_INSTRUCTION = `
-您是一位極具智慧、高品質的 Markdown 影像辨識與 OCR 助理。
-您的工作是分析使用者發送的照片（可能是實體收據、發票、手寫筆記、白板、書籍頁面或螢幕截圖），執行高精準度的文字提取 (OCR)，並將提取的內容整理成結構化、美觀的 Markdown 格式，以便安全寫入使用者的本地 Obsidian 筆記中。
+${instructionPrefix}
 
 【分析與整理指南】
-1. 辨識照片類型：在 Markdown 內容開頭，使用一行粗體說明這張照片是什麼（例如：**📷 實體收據 / 統一發票**、**📷 手寫白板筆記** 等）。
-2. 高精準度 OCR：提取照片中的所有關鍵文字、數據與內容。
+1. 辨識照片類型與分析主題：在 Markdown 內容開頭，使用一行粗體說明這張照片與分析主旨（例如：**📷 實體收據 / 統一發票**、**📷 手寫白板筆記**、**📷 影像深度分析：[主題]** 等）。
+2. 分析與文字提取：針對使用者指定的任務深度提取資訊或進行影像分析。
 3. 結構化 Markdown 排版：
-   - 如果是「收據/發票/帳單」：請將交易時間、商家名稱、發票號碼、明細品項與金額整理成一個漂亮的 Markdown 表格，並加上「總金額」摘要。
-   - 如果是「手寫筆記/白板/腦力激盪」：請將手寫文字整理成結構清晰的標題與條列式清單 (Bullet Points)，修正手寫時的草率語法但保留完整語意。
-   - 如果是「書本/文件/截圖」：將文字提取出來，保留原本的段落結構，並將重點字詞使用粗體標記。
+   - 始終以結構清晰的標題、Markdown 表格或條列式清單 (Bullet Points) 呈現內容。
+   - 保留原本的段落結構，並將重點字詞使用粗體標記。
 
 【回覆文字 (replyText)】
-請使用非常有溫度、專業且親切的繁體中文，向使用者確認您已經看懂了這張照片，並概要說明您記錄了什麼。
+請使用非常有溫度、專業且親切的繁體中文，向使用者解答他們的問題，或概要說明您的分析與記錄結果。
 `;
 
   const IMAGE_RESPONSE_SCHEMA = {
@@ -639,6 +706,11 @@ export async function processImageWithAI(imageBase64, mimeType) {
 
   const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
+  // 設定多模態模型呼叫時的使用者提示詞
+  const promptText = customPrompt 
+    ? `使用者提供此影像，並附帶以下指令或問題：\n\n「${customPrompt}」\n\n請根據指示對此影像進行深度分析，將詳細的分析與說明內容整理為高品質的 Markdown 筆記。`
+    : "請分析此影像，執行 OCR 文字提取，並將其整理為高品質的 Markdown 筆記。";
+
   for (const modelName of models) {
     try {
       console.log(`[Gemini/Vision] 正在嘗試使用模型 ${modelName} 進行影像分析與 OCR...`);
@@ -646,7 +718,7 @@ export async function processImageWithAI(imageBase64, mimeType) {
       const response = await ai.models.generateContent({
         model: modelName,
         contents: [
-          { text: "請分析此影像，執行 OCR 文字提取，並將其整理為高品質的 Markdown 筆記。" },
+          { text: promptText },
           {
             inlineData: {
               mimeType: mimeType,
