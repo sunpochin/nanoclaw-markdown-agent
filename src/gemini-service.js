@@ -865,10 +865,17 @@ ${formattedSearch.trim()}
  * @returns {Promise<object>}
  */
 export async function processImageWithAI(imageBase64, mimeType, customPrompt = '') {
+  // [技術] 確保 mimeType 為 Gemini 支援的圖片格式，防範 application/octet-stream 導致的 400 錯誤與本機降級超時
+  // [童趣] 幫照片換上漂亮的 JPEG 魔法外衣，小天使才看得懂，絕不搞錯！
+  let activeMimeType = mimeType;
+  if (!activeMimeType || activeMimeType === 'application/octet-stream' || !activeMimeType.startsWith('image/')) {
+    activeMimeType = 'image/jpeg';
+  }
+
   if (isCloudDisabled()) {
     console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，正在嘗試使用本地 qwen2.5vl:7b 進行視覺分析...`);
     try {
-      const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+      const localVisionResult = await processImageWithLocalOllama(imageBase64, activeMimeType, customPrompt);
       localVisionResult.modelUsed = 'qwen2.5vl:7b';
       return localVisionResult;
     } catch (localError) {
@@ -939,7 +946,7 @@ ${instructionPrefix}
           { text: promptText },
           {
             inlineData: {
-              mimeType: mimeType,
+              mimeType: activeMimeType,
               data: imageBase64
             }
           }
@@ -961,7 +968,7 @@ ${instructionPrefix}
         // [技術] 若雲端最後一個模型也爆 429 失敗，立刻嘗試降級至本地視覺模型進行救援，免去直接崩潰拋錯
         // [童趣] 雲端城堡大爆滿，自動改用本機視覺小精靈進行安全防護救援，吐出完美的 OCR 結構
         try {
-          const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+          const localVisionResult = await processImageWithLocalOllama(imageBase64, activeMimeType, customPrompt);
           localVisionResult.modelUsed = 'qwen2.5vl:7b';
           return localVisionResult;
         } catch (localError) {
