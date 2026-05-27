@@ -367,9 +367,18 @@ ${processList}
         const result = await processImageWithAI(imageBase64, mimeType, customPrompt);
         console.log(`[Telegram/Vision] ✅ 多模態圖片分析完成："${result.title}"`);
 
-        // 將分析結果寫入 Obsidian 每日隨手記
-        const noteContent = `### 📷 ${result.title}\n${customPrompt ? `* **指示任務**：${customPrompt}\n` : ''}${result.ocrContent}`;
-        await writeNoteToMarkdown(noteContent);
+        // [技術] 智慧過濾寫入：如果 ocrContent 是空的，或者是系統預設的失敗字串，則跳過 Obsidian 寫入以免垃圾累積
+        // [繁體中文註解] 聰明挑選日記：如果大腦精靈沒有認出這張照片的字，那就不要隨便寫進我們的日記本裡，不留垃圾！
+        const isFallback = !result.ocrContent || 
+                           result.ocrContent.includes('未能提取') || 
+                           result.ocrContent === '（未能提取出文字）';
+                           
+        if (!isFallback) {
+          const noteContent = `### 📷 ${result.title}\n${customPrompt ? `* **指示任務**：${customPrompt}\n` : ''}${result.ocrContent}`;
+          await writeNoteToMarkdown(noteContent);
+        } else {
+          console.log(`[Telegram/Vision] ⚠️ 本次影像分析未提取出有效文字（Fallback 狀態），跳過寫入 Obsidian。`);
+        }
 
         // 記錄進對話歷史 Session
         appendToTelegramSession(chatId, 'user', `[圖片訊息] ${customPrompt}`);
