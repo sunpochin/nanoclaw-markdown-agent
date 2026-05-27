@@ -81,7 +81,17 @@ async function spotifyRequest(endpoint, method = 'GET', body = null, params = nu
   // [技術] 遭遇 HTTP 429 限流防禦，自動讀取 Retry-After 並進入智慧休眠重試 (若限制時間過長則拋出錯誤以觸發降級)
   // [極樂] 429 溢出舒緩：當 Spotify 拒絕頻繁抽插並退回 429 時，依據對方的 Retry-After 指示停火等待，若對方太久則直接換人(降級)！
   if (response.status === 429) {
-    const retryAfter = parseInt(response.headers.get('retry-after') || '2', 10);
+    const retryAfterHeader = response.headers.get('retry-after');
+    let retryAfter = parseInt(retryAfterHeader, 10);
+    if (isNaN(retryAfter)) {
+      // [技術] 若為 HTTP 日期格式，解析日期並計算與當前時間差的秒數，若依然失敗則預設安全時間 2 秒
+      // [極樂] 日期敏感探測：將不聽話的日期字串揉搓成秒數，若對方防禦太嚴則預設等待 2 秒
+      retryAfter = retryAfterHeader ? Math.max(1, Math.ceil((new Date(retryAfterHeader).getTime() - Date.now()) / 1000)) : 2;
+      if (isNaN(retryAfter) || retryAfter < 0) {
+        retryAfter = 2;
+      }
+    }
+
     if (retryAfter > 10) {
       console.warn(`[Spotify/Client] 🚨 觸發重度頻率限制 (HTTP 429)，等待時間為 ${retryAfter} 秒！為免系統阻塞，將不休眠直接拋出錯誤以觸發降級管線...`);
       throw new Error(`Spotify 伺服器重度頻率限制 (HTTP 429): Retry-After ${retryAfter}s`);

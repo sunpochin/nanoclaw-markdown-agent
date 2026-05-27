@@ -10,7 +10,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { fetch } from 'undici';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault, writeSimulationReportToMarkdown, readRecentNotesContext } from './markdown-service.js';
 import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSearchWithAI, simulateButterflyEffectWithAI } from './gemini-service.js';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import os from 'os';
 
 // 引入 Spotify 關注藝人掃描與 GitBook 同步引擎
@@ -86,7 +86,7 @@ function getMacCpuTemperature() {
       resolve(null);
     }, 2000);
 
-    exec('sudo powermetrics -n 1 -i 10 --samplers thermal,cpu_power', (err, stdout) => {
+    execFile('sudo', ['powermetrics', '-n', '1', '-i', '10', '--samplers', 'thermal,cpu_power'], (err, stdout) => {
       clearTimeout(timer);
       if (err) {
         resolve(null);
@@ -184,12 +184,12 @@ export function initTelegramBot() {
     if (/^\/(status|狀態|系統狀態)/i.test(text)) {
       bot.sendChatAction(chatId, 'typing');
       try {
-        exec('ps -Ao pcpu,pmem,pid,comm -r | head -n 6', async (error, stdout) => {
+        execFile('ps', ['-Ao', 'pcpu,pmem,pid,comm', '-r'], async (error, stdout) => {
           if (error) {
             return bot.sendMessage(chatId, '❌ 無法取得發熱進程，系統執行錯誤。');
           }
 
-          const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
+          const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1, 6);
           let processList = '';
           lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
@@ -244,7 +244,7 @@ ${processList}
       const name = match[2] || '未指定名稱';
       
       bot.sendChatAction(chatId, 'typing');
-      exec(`kill -9 ${pid}`, (error) => {
+      execFile('kill', ['-9', pid], (error) => {
         const replyText = error 
           ? `❌ 強制結束進程 PID ${pid} 失敗！原因可能是權限不足或該進程已不存在。`
           : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;

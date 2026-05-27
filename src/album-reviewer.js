@@ -15,10 +15,12 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// 建立本地 Ollama 專屬的持久化 Agent，防止連線高頻握手耗損
+// 建立本地 Ollama 專屬的持久化 Agent，防止連線高頻握手耗損並防止大模型生成超時
 const ollamaAgent = new Agent({
   keepAliveTimeout: 10 * 1000,
-  keepAliveMaxTimeout: 15 * 1000
+  keepAliveMaxTimeout: 15 * 1000,
+  headersTimeout: 300000, // 5 分鐘，防止本地大模型生成時間過長導致超時
+  bodyTimeout: 300000
 });
 
 // 初始化雲端 Google Gen AI 客戶端

@@ -149,7 +149,8 @@ export async function publishToGitBook(album, reviewMarkdown) {
   await ensureGitBookStructure();
 
   const title = `${album.primary_artist} - ${album.name}`;
-  const slug = generateSlug(`${album.primary_artist}-${album.name}`);
+  // 產生 URL 友善的 Slug，若為空則安全回退至專輯 ID 或預設值，防範特殊字元導致隱藏檔案異常
+  const slug = generateSlug(`${album.primary_artist}-${album.name}`) || album.id || 'unknown';
   const fileName = `${slug}.md`;
   const relativeFilePath = `new-releases/${fileName}`;
   const fullFilePath = path.join(RELEASES_DIR, fileName);
