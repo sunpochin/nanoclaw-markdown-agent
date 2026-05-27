@@ -16,6 +16,7 @@ import fs from 'fs/promises';
 import { mkdirSync } from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { acquireLock } from './file-lock.js';
 
 // [技術] 載入環境變數設定
 // [童趣] 打開百寶箱，找出我們的魔法地圖（環境變數設定）
@@ -359,11 +360,16 @@ export async function insertFact(factData) {
   // [童趣] 把卡片資訊打扮成漂亮的 Markdown 格式，準備寫進故事書
   const factBlock = formatFactBlock(factId, factData, dateStr);
 
-  // === 兩段提交第一步：先寫 Obsidian ===
-  // [童趣] 第一步：先在故事書上寫下新資訊，確認寫好了才繼續
-  await fs.mkdir(path.dirname(absFilePath), { recursive: true });
-  await fs.appendFile(absFilePath, factBlock, 'utf8');
-  console.log(`[MemoryDB] 📝 事實已寫入 Obsidian：${filePath}`);
+  // === 兩段提交第一步：先寫 Obsidian (引入檔案鎖確保並行安全) ===
+  // [童趣] 第一步：先在故事書上寫下新資訊，確認寫好了才繼續。大家乖乖排隊一次只有一個人能寫喔！
+  const release = await acquireLock(absFilePath);
+  try {
+    await fs.mkdir(path.dirname(absFilePath), { recursive: true });
+    await fs.appendFile(absFilePath, factBlock, 'utf8');
+    console.log(`[MemoryDB] 📝 事實已寫入 Obsidian：${filePath}`);
+  } finally {
+    release();
+  }
 
   // === 兩段提交第二步：Obsidian 成功後才寫 SQLite ===
   // [童趣] 第二步：故事書寫好了，現在把索引卡片也補進卡片盒裡
@@ -516,9 +522,10 @@ export async function markFactsOutdated(factIds) {
       continue;
     }
 
-    // [技術] 更新 Obsidian Markdown 中該 fact 區塊的狀態欄位
-    // [童趣] 在故事書上把「狀態: current」改成「狀態: outdated」
+    // [技術] 更新 Obsidian Markdown 中該 fact 區塊的狀態欄位 (引入檔案鎖確保 read-modify-write 原子性)
+    // [童趣] 在故事書上把「狀態: current」改成「狀態: outdated」。改寫前記得先拿鎖排隊喔！
     const absFilePath = path.join(VAULT_DIR, row.file_path);
+    const release = await acquireLock(absFilePath);
     try {
       let fileContent = await fs.readFile(absFilePath, 'utf8');
 
@@ -535,6 +542,8 @@ export async function markFactsOutdated(factIds) {
       await fs.writeFile(absFilePath, fileContent, 'utf8');
     } catch (err) {
       console.warn(`[MemoryDB] ⚠️ 無法更新 Obsidian 中的 status：${row.file_path} — ${err.message}`);
+    } finally {
+      release();
     }
 
     // [技術] 更新 SQLite 中的 status
