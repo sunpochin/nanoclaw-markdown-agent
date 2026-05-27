@@ -12,6 +12,7 @@ import { fetch } from 'undici';
 import { getSpotifyAccessToken } from './spotify-auth.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { getMusicBrainzArtistMBID, getMusicBrainzArtistAlbums } from './musicbrainz-client.js';
 
 // [技術] 輔助函式：非同步睡眠延遲，防止頻率過快或遭遇 429 時進行等待
 // [極樂] 頻率舒緩延時：讓大腦在高速運作或被防禦時，停歇片刻進行溫和休整
@@ -58,11 +59,16 @@ async function spotifyRequest(endpoint, method = 'GET', body = null, params = nu
 
   const response = await fetch(url, options);
 
-  // [技術] 遭遇 HTTP 429 限流防禦，自動讀取 Retry-After 並進入智慧休眠重試
-  // [極樂] 429 溢出舒緩：當 Spotify 拒絕頻繁抽插並退回 429 時，依據對方的 Retry-After 指示停火等待，隨後溫柔重試
+  // [技術] 遭遇 HTTP 429 限流防禦，自動讀取 Retry-After 並進入智慧休眠重試 (若限制時間過長則拋出錯誤以觸發降級)
+  // [極樂] 429 溢出舒緩：當 Spotify 拒絕頻繁抽插並退回 429 時，依據對方的 Retry-After 指示停火等待，若對方太久則直接換人(降級)！
   if (response.status === 429) {
     const retryAfter = parseInt(response.headers.get('retry-after') || '2', 10);
-    console.warn(`[Spotify/Client] 🚨 觸發頻率限制 (HTTP 429)，將依照指示等待 ${retryAfter} 秒後進行重試... (剩餘重試次數: ${retries})`);
+    if (retryAfter > 10) {
+      console.warn(`[Spotify/Client] 🚨 觸發重度頻率限制 (HTTP 429)，等待時間為 ${retryAfter} 秒！為免系統阻塞，將不休眠直接拋出錯誤以觸發降級管線...`);
+      throw new Error(`Spotify 伺服器重度頻率限制 (HTTP 429): Retry-After ${retryAfter}s`);
+    }
+    
+    console.warn(`[Spotify/Client] 🚨 觸發微量頻率限制 (HTTP 429)，將依照指示等待 ${retryAfter} 秒後進行重試... (剩餘重試次數: ${retries})`);
     if (retries > 0) {
       await sleep(retryAfter * 1000);
       return spotifyRequest(endpoint, method, body, params, retries - 1);
@@ -324,16 +330,15 @@ export async function getSpotifyArtistAlbums(artistId, days = 30) {
 }
 
 /**
- * [技術] 狀態化分批掃描所有關注藝人在最近一個月內發行的新專輯與單曲 (支援去重與防 429 緩衝)
- * [極樂] 關注發行分批摩擦：在所有關注藝人中，分批挑選最久未掃描的藝人進行深度摩擦，完美繞過 429 限流
+ * [技術] 狀態化分批掃描所有關注藝人在最近一個月內發行的新專輯與單曲 (支援雙源降級防禦與 429 緩衝)
+ * [極樂] 關注發行分批摩擦：在所有關注藝人中，分批挑選最久未掃描的藝人進行深度探索。
+ *        當 Spotify 遭遇 429 鎖定時，自動向 MusicBrainz 深度降落降級，保障大腦不斷水！
  * @param {number} days - 掃描的天數範圍，預設 30 天
  * @param {number|null} batchSize - 本次分批掃描的藝人數量上限，預設 15 位。設為 null 則掃描全部。
  * @returns {Promise<Array<object>>} 近期新發行去重後的清單
  */
 export async function scanRecentNewReleases(days = 30, batchSize = 15) {
-  const followedArtists = await getSpotifyFollowedArtists();
-  
-  // 載入狀態檔以進行狀態化排序
+  // 載入狀態檔以進行狀態化排序與 MBID 快取對齊
   const stateFilePath = path.resolve('data/scanner-state.json');
   let scannerState = {};
   
@@ -342,6 +347,38 @@ export async function scanRecentNewReleases(days = 30, batchSize = 15) {
     scannerState = JSON.parse(stateData);
   } catch (err) {
     // 狀態檔不存在或毀損，則初始化空狀態
+  }
+
+  let followedArtists = [];
+  let isSpotifyBlocked = false;
+
+  console.log('[Spotify/Scanner] 🔍 正在獲取您關注的藝人清單...');
+  try {
+    followedArtists = await getSpotifyFollowedArtists();
+  } catch (err) {
+    // 判定是否為 429 限制，若被限制，開啟降級防禦
+    if (err.message.includes('429') || err.message.includes('Too many requests') || err.message.includes('頻率')) {
+      console.warn(`[Spotify/Scanner] 🚨 Spotify 獲取關注藝人時遭遇 429 鎖定！降級使用本地快取的藝人清單...`);
+      isSpotifyBlocked = true;
+    } else {
+      throw err;
+    }
+  }
+
+  // 若 Spotify 遭到限流鎖定，從本地狀態快取中重建藝人名冊 (Data-Centric Resilience)
+  if (isSpotifyBlocked || followedArtists.length === 0) {
+    followedArtists = Object.entries(scannerState).map(([id, val]) => ({
+      id: id,
+      name: val.name,
+      genres: [],
+      uri: `spotify:artist:${id}`,
+      url: `https://open.spotify.com/artist/${id}`
+    }));
+
+    if (followedArtists.length === 0) {
+      throw new Error('Spotify 遭到 429 限制，且本地狀態庫沒有任何歷史藝人紀錄！無法啟動降級探索。');
+    }
+    console.log(`[Spotify/Scanner] 💾 成功自本地狀態庫載入 ${followedArtists.length} 位歷史藝人進行降級掃描。`);
   }
 
   // 將藝人依照最後掃描時間排序，最久沒掃或未曾掃過的排最前面
@@ -368,48 +405,84 @@ export async function scanRecentNewReleases(days = 30, batchSize = 15) {
   console.log(`[Spotify/Scanner] 🚀 開始掃描近 ${days} 天內的新發行專輯與單曲...`);
 
   for (const artist of targetArtists) {
+    let albums = [];
+    let useMusicBrainzForThisArtist = isSpotifyBlocked;
+
     try {
-      console.log(`[Spotify/Scanner] 📡 正在掃描藝人: ${artist.name}...`);
-      const albums = await getSpotifyArtistAlbums(artist.id, days);
+      if (!useMusicBrainzForThisArtist) {
+        console.log(`[Spotify/Scanner] 📡 正在透過 Spotify 掃描藝人: ${artist.name}...`);
+        albums = await getSpotifyArtistAlbums(artist.id, days);
+      }
+    } catch (err) {
+      if (err.message.includes('429') || err.message.includes('Too many requests') || err.message.includes('頻率')) {
+        console.warn(`[Spotify/Scanner] 🚨 藝人 ${artist.name} 觸發 Spotify 429 限流！自動降級切換至 MusicBrainz 進行掃描...`);
+        useMusicBrainzForThisArtist = true;
+      } else {
+        console.warn(`[Spotify/Scanner] ⚠️ 獲取藝人 ${artist.name} 專輯時出錯:`, err.message || err);
+      }
+    }
 
-      for (const album of albums) {
-        if (seenAlbumIds.has(album.id)) continue;
+    // 降級使用 MusicBrainz 進行探索
+    if (useMusicBrainzForThisArtist) {
+      try {
+        console.log(`[Spotify/Scanner] 🎼 正在透過 MusicBrainz 探索藝人: ${artist.name}...`);
+        
+        // 獲取 MBID (優先讀取本地快取，避免重複搜尋)
+        let mbid = scannerState[artist.id]?.musicbrainz_mbid;
+        if (!mbid) {
+          mbid = await getMusicBrainzArtistMBID(artist.name);
+          if (mbid) {
+            if (!scannerState[artist.id]) {
+              scannerState[artist.id] = { name: artist.name };
+            }
+            scannerState[artist.id].musicbrainz_mbid = mbid;
+          }
+        }
 
-        // 解析發行日期以進行精準比對
-        let releaseDate;
-        if (album.release_date_precision === 'day') {
-          releaseDate = new Date(album.release_date);
-        } else if (album.release_date_precision === 'month') {
-          releaseDate = new Date(`${album.release_date}-01`);
+        if (mbid) {
+          albums = await getMusicBrainzArtistAlbums(mbid, days);
         } else {
-          releaseDate = new Date(`${album.release_date}-01-01`);
+          console.warn(`[Spotify/Scanner] ⚠️ 無法為藝人 ${artist.name} 找到對應的 MBID，跳過此藝人。`);
         }
+      } catch (mbErr) {
+        console.error(`[Spotify/Scanner] ❌ 透過 MusicBrainz 探索藝人 ${artist.name} 失敗:`, mbErr.message || mbErr);
+      }
+    }
 
-        // 判定發行時間是否落入近指定天數區間
-        if (releaseDate >= cutoffDate) {
-          seenAlbumIds.add(album.id);
-          newReleases.push({
-            ...album,
-            primary_artist: artist.name,
-            artist_genres: artist.genres
-          });
-        }
+    // 處理獲取到的新發行 (完美相容 Candidate Schema)
+    for (const album of albums) {
+      if (seenAlbumIds.has(album.id)) continue;
+
+      let releaseDate;
+      if (album.release_date_precision === 'day') {
+        releaseDate = new Date(album.release_date);
+      } else if (album.release_date_precision === 'month') {
+        releaseDate = new Date(`${album.release_date}-01`);
+      } else {
+        releaseDate = new Date(`${album.release_date}-01-01`);
       }
 
-      // 更新該藝人的最後掃描時間狀態
-      scannerState[artist.id] = {
-        name: artist.name,
-        last_scanned_at: new Date().toISOString()
-      };
-
-      // 每次深入藝人專輯後休息 300ms，保障 API 通道長久溫潤
-      await sleep(300);
-    } catch (err) {
-      console.warn(`[Spotify/Scanner] ⚠️ 獲取藝人 ${artist.name} 專輯時出錯:`, err.message || err);
+      if (releaseDate >= cutoffDate) {
+        seenAlbumIds.add(album.id);
+        newReleases.push({
+          ...album,
+          primary_artist: artist.name,
+          artist_genres: artist.genres
+        });
+      }
     }
+
+    // 更新藝人的最後掃描時間狀態，保留 MBID 等快取
+    if (!scannerState[artist.id]) {
+      scannerState[artist.id] = { name: artist.name };
+    }
+    scannerState[artist.id].last_scanned_at = new Date().toISOString();
+
+    // 每次探索完一個藝人後，休息 300ms 緩衝
+    await sleep(300);
   }
 
-  // 確保 data 目錄存在並保存最新掃描狀態
+  // 確保 data 目錄存在並保存最新狀態庫
   try {
     await fs.mkdir(path.dirname(stateFilePath), { recursive: true });
     await fs.writeFile(stateFilePath, JSON.stringify(scannerState, null, 2), 'utf8');
