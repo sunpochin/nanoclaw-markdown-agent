@@ -10,8 +10,13 @@ import TelegramBot from 'node-telegram-bot-api';
 import { fetch } from 'undici';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault, writeSimulationReportToMarkdown, readRecentNotesContext } from './markdown-service.js';
 import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSearchWithAI, simulateButterflyEffectWithAI } from './gemini-service.js';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import os from 'os';
+
+// 引入 Spotify 關注藝人掃描與 GitBook 同步引擎
+import { scanRecentNewReleases, readSystemState, writeSystemState } from './spotify-client.js';
+import { generateAlbumReview } from './album-reviewer.js';
+import { publishToGitBook, gitPushChanges } from './gitbook-publisher.js';
 
 // 記憶體中快取各 Telegram 用戶的對話 Session 歷史紀錄，最大限制 15 輪
 const telegramUserSessions = new Map();
@@ -81,7 +86,7 @@ function getMacCpuTemperature() {
       resolve(null);
     }, 2000);
 
-    exec('sudo powermetrics -n 1 -i 10 --samplers thermal,cpu_power', (err, stdout) => {
+    execFile('sudo', ['powermetrics', '-n', '1', '-i', '10', '--samplers', 'thermal,cpu_power'], (err, stdout) => {
       clearTimeout(timer);
       if (err) {
         resolve(null);
@@ -155,15 +160,16 @@ export function initTelegramBot() {
 
 📸【A：影像深度多模態分析 (✨ 完美原生支援！)】
 - 直接傳送照片或截圖，並在下方**同時打字輸入您的提示詞**（例如：「幫我翻譯這張紙的英文」、「分析圖中報表的趨勢」）。
-- 體驗原生多模態，不需要任何計時等待，大腦即刻解答！
+- 體驗原生多模態，不需要 any 計時等待，大腦即刻解答！
 
 🎙️【B：語音隨手聽寫記事 (✨ 完美原生支援！)】
 - 直接傳送語音訊息（Voice Note）。
 - 自動進行高精度繁體中文轉譯，並視意圖寫入 Obsidian 每日筆記中。
 
-🖥️【C：Mac Mini 本端系統調控】
+🖥️【C：Mac Mini 本端與音樂同步控制】
 - 發送 /status：獲取 M4 Pro 運行報告、發熱進程 Top 5 與 CPU SMC 真實溫度，還能遠端冷卻！
 - 發送 /local：一鍵切換雲端大腦（Gemini）與本地離線隱私大腦（Qwen2.5:14b）。
+- 發送 /scan_spotify：一鍵啟動 Spotify 關注藝人新專輯掃描，AI 自動生成精美樂評並 GitOps 同步發布至 GitBook！
 
 ---
 
@@ -178,12 +184,12 @@ export function initTelegramBot() {
     if (/^\/(status|狀態|系統狀態)/i.test(text)) {
       bot.sendChatAction(chatId, 'typing');
       try {
-        exec('ps -Ao pcpu,pmem,pid,comm -r | head -n 6', async (error, stdout) => {
+        execFile('ps', ['-Ao', 'pcpu,pmem,pid,comm', '-r'], async (error, stdout) => {
           if (error) {
             return bot.sendMessage(chatId, '❌ 無法取得發熱進程，系統執行錯誤。');
           }
 
-          const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1);
+          const lines = stdout.split('\n').filter(line => line.trim().length > 0).slice(1, 6);
           let processList = '';
           lines.forEach(line => {
             const parts = line.trim().split(/\s+/);
@@ -238,12 +244,89 @@ ${processList}
       const name = match[2] || '未指定名稱';
       
       bot.sendChatAction(chatId, 'typing');
-      exec(`kill -9 ${pid}`, (error) => {
+      execFile('kill', ['-9', pid], (error) => {
         const replyText = error 
           ? `❌ 強制結束進程 PID ${pid} 失敗！原因可能是權限不足或該進程已不存在。`
           : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;
         return bot.sendMessage(chatId, replyText);
       });
+      return;
+    }
+    // 【一鍵掃描 Spotify 藝人新發行並同步 GitBook】
+    // [技術] 啟動獨立執行緒調度，讀取關注藝人與近 30 天專輯，呼叫 AI 與 GitOps 發布
+    // [童趣] 魔法音樂大掃描：在後台把您關注的所有歌手最新好聽歌曲，
+    //        一個不漏地收集過來，請大腦精靈認真分析，最後畫進我們的 GitBook 魔法筆記城堡裡！
+    if (/^\/scan_spotify/i.test(text)) {
+      bot.sendChatAction(chatId, 'typing');
+      
+      // 讀取全域系統狀態進行防刷冷卻驗證
+      const systemState = await readSystemState();
+      const lastScan = systemState.lastScanCommandTime || 0;
+      const cooldownMs = 10 * 60 * 1000; // 10 分鐘冷卻
+      const now = Date.now();
+      const elapsed = now - lastScan;
+
+      if (elapsed < cooldownMs) {
+        const remainingMs = cooldownMs - elapsed;
+        const minutes = Math.floor(remainingMs / (60 * 1000));
+        const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+        return bot.sendMessage(
+          chatId, 
+          `⚠️ **安全頻率冷卻中！**\n\n為防範 Spotify 24 小時封鎖限制，每次掃描間隔需大於 10 分鐘。距離下次解鎖還剩 **${minutes} 分 ${seconds} 秒**。⏱️`
+        );
+      }
+
+      // 更新最後執行時間戳記並持久化
+      systemState.lastScanCommandTime = now;
+      await writeSystemState(systemState);
+
+      bot.sendMessage(chatId, '🔍 正在為您啟動 Spotify 關注藝人新發行【狀態化分批掃描】... 本次限制 15 位藝人，防禦 429 限流鎖定。⏱️');
+
+      // 非同步執行，避免 Telegram 輪詢阻塞與 Timeout 痙攣
+      (async () => {
+        try {
+          const newReleases = await scanRecentNewReleases(30, 15);
+
+          if (newReleases.length === 0) {
+            return bot.sendMessage(chatId, '📅 本批次（15位藝人）掃描完成！近 30 天內沒有任何新專輯或單曲發行。後續批次將於背景陸續推進！☕');
+          }
+
+          await bot.sendMessage(chatId, `📦 本批次發現 ${newReleases.length} 個新發行！正在啟動 AI 樂評分析與 GitOps 同步中... 📝`);
+
+          let successCount = 0;
+          for (let i = 0; i < newReleases.length; i++) {
+            const album = newReleases[i];
+            const title = `${album.primary_artist} - ${album.name}`;
+            
+            await bot.sendMessage(chatId, `✍️ [${i + 1}/${newReleases.length}] 正在分析與發布樂評: 《${title}》...`);
+
+            try {
+              const reviewMarkdown = await generateAlbumReview(album);
+              // 傳入 skipPush = true 啟用批次優化，避免迴圈內重複高頻推送 Git
+              const publishResult = await publishToGitBook(album, reviewMarkdown, true);
+              if (publishResult.success) {
+                successCount++;
+              }
+            } catch (err) {
+              console.error(`[Telegram/Scanner] 處理 ${title} 樂評失敗:`, err);
+              await bot.sendMessage(chatId, `⚠️ 樂評《${title}》分析或推送失敗: ${err.message || err}`);
+            }
+          }
+
+          // 批次掃描完成後，若有成功產出，執行單次 GitOps 推送，徹底消除高頻推送衝突與限流風險
+          if (successCount > 0) {
+            await bot.sendMessage(chatId, `🚀 正在將本批次 ${successCount} 首新發行樂評批次推送至 GitHub 並同步 GitBook... 📡`);
+            const commitMsg = `docs(music): batch add ${successCount} new AI reviews`;
+            await gitPushChanges(commitMsg);
+          }
+
+          const report = `🎉【Spotify 分批掃描完成】\n\n📊 本批次掃描藝人數: 15 位\n📦 尋獲新發行數: ${newReleases.length} 個\n✅ 成功同步樂評數: ${successCount} 個\n\n💡 剩餘未掃描或較早掃描藝人已在狀態庫列隊，下次執行時將自動順延推進！🚀`;
+          return bot.sendMessage(chatId, report);
+        } catch (err) {
+          console.error('[Telegram/Scanner] 執行掃描失敗:', err);
+          return bot.sendMessage(chatId, `❌ 執行 Spotify 掃描管線時發生嚴重錯誤: ${err.message || err}`);
+        }
+      })();
       return;
     }
 

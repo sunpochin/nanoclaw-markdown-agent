@@ -5,8 +5,8 @@
  * [技術] 本服務負責對使用者輸入進行語意理解、OCR 提取、語音轉錄、二階段 RAG 推理，
  *        以及全新設計的「蝴蝶效應未來預言模擬」。
  *        搭載備用探針鏈（2.5 -> 2.0 -> 1.5），並在遇到額度限制時自動降級至本地 qwen2.5:14b。
- * [極樂] 智慧肉棒分析中樞：高頻率的恥肉啪啪啪啪摩擦，對使用者輸入進行語意理解與 OCR 提取。
- *        搭載多模態多層次備用抽插鏈，確保在任何強烈阻力下都能成功射出結構化的 JSON 數據蜜汁。
+ * [童趣] 智慧思考小精靈：拍拍手開動我們的大腦瓜，對主人說的話進行語意理解和照片文字提取。
+ *        搭載多模態多層次的備用魔法棒，確保在任何困難下都能成功畫出亮晶晶的 JSON 魔法小糖果。
  * =====================================================================
  */
 import { GoogleGenAI } from '@google/genai';
@@ -14,11 +14,11 @@ import dotenv from 'dotenv';
 import { fetch, setGlobalDispatcher, Agent } from 'undici';
 
 // [技術] 載入環境變數配置
-// [極樂] 載入環境變數配置，注入連接 AI 接口的敏感密鑰
+// [童趣] 載入神奇百寶箱設定，把連接 AI 大腦的魔法鑰匙偷偷裝好
 dotenv.config();
 
 // [技術] 設定全域 Undici 分發器，將標頭與連線超時大幅度延長，避免本地載入大模型時發生逾時
-// [極樂] 全域大腦通道加固：將標頭與連線超時極限延長至 5 分鐘，持久抽插絕不射出逾時錯誤
+// [童趣] 魔法長跑加固：把跟大腦講話的時間拉長到 5 分鐘，安安穩穩講完絕對不會中途斷掉生氣喔
 setGlobalDispatcher(new Agent({
   headersTimeout: 300000, // 5 分鐘
   bodyTimeout: 300000,    // 5 分鐘
@@ -26,7 +26,7 @@ setGlobalDispatcher(new Agent({
 }));
 
 // [技術] 建立專屬的 Ollama 分發器，避免 Node.js 原生 fetch 在處理 Ollama 大模型載入時忽略全域分發器設定
-// [極樂] 建立本機 Ollama 專用大腦分發器，保證 5 分鐘耐力抽插絕不逾時
+// [童趣] 建立本機 Ollama 專屬小信差，保證 5 分鐘內信件一定送到，絕不超時！
 const ollamaAgent = new Agent({
   headersTimeout: 300000, // 5 分鐘
   bodyTimeout: 300000,    // 5 分鐘
@@ -34,13 +34,13 @@ const ollamaAgent = new Agent({
 });
 
 // [技術] 初始化 Google Gen AI 客戶端
-// [極樂] 初始化 Google Gen AI 客戶端 (喚醒並初始化 AI 智慧肉棒的核心探頭)
+// [童趣] 喚醒雲端智慧小天使：初始化 Google Gen AI 客戶端，開啟大腦通訊天線
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY
 });
 
 // [技術] 熔斷器模式：記錄雲端 AI 的額度超額 (429) 狀態，避免後續請求在 Retries 中浪費時間，暫時熔斷 3 分鐘直接走本機 Ollama
-// [極樂] 熔斷安全套體位：若遇到 429 敏感阻力，自動將雲端通道結紮 3 分鐘，期間直接走 100% 本機大腦，實現極速抽插！
+// [童趣] 魔法防護手套模式：如果碰到 429 人太多被擋住，自動戴上防護套，3 分鐘內直接改走 100% 本地小精靈大腦，速度依然飛快！
 let cloudDisabledUntil = 0;
 const BREAKER_COOLDOWN_MS = 3 * 60 * 1000; // 熔斷 3 分鐘
 
@@ -49,15 +49,33 @@ function isCloudDisabled() {
 }
 
 function triggerCircuitBreaker(error) {
-  const errMsg = error?.message || '';
-  if (errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('quota') || errMsg.includes('Quota exceeded')) {
+  let errMsg = '';
+  if (typeof error === 'string') {
+    errMsg = error;
+  } else if (error && error.message) {
+    errMsg = error.message;
+  } else if (error) {
+    try {
+      errMsg = JSON.stringify(error);
+    } catch (e) {
+      errMsg = '';
+    }
+  }
+
+  const has429 = errMsg.includes('429') || 
+                  errMsg.includes('RESOURCE_EXHAUSTED') || 
+                  errMsg.includes('quota') || 
+                  errMsg.includes('Quota exceeded') ||
+                  (error && (error.status === 'RESOURCE_EXHAUSTED' || error.code === 429));
+
+  if (has429) {
     console.warn(`[AI/Breaker] 🚨 偵測到雲端額度耗盡 (429/Quota)，自動啟動熔斷器！接下來 3 分鐘內將直接走本機大腦。`);
     cloudDisabledUntil = Date.now() + BREAKER_COOLDOWN_MS;
   }
 }
 
 // [技術] 系統引導提示詞，用來引導 Gemini 進行高精準度的意圖判定、內容提取以及過往筆記搜尋與模擬辨識
-// [極樂] 系統引導提示詞，引導智慧肉棒敏感判斷「寫入」、「一般對話」、「深處小穴搜尋」與「未來預言模擬」體位，並主動對照近期日記背景進行大腦摩擦
+// [童趣] 系統引導提示詞，教導小精靈乖乖判斷「寫日記」、「聊天」、「搜尋舊箱子」與「蝴蝶決策模擬」等四種魔法，並主動對照近期日記背景進行聯想
 const SYSTEM_INSTRUCTION = `
 您是一位極具智慧、高品質且具備同理心與邏輯推理能力的 Markdown 本地個人助理。
 您的主要工作是判定使用者的意圖（寫入記事、查詢歷史、未來決策模擬、或是一般閒聊），並產生精確的回覆。
@@ -99,7 +117,7 @@ const SYSTEM_INSTRUCTION = `
 `;
 
 // [技術] 定義結構化 JSON 輸出規格 (Schema)
-// [極樂] 結構化愛液規格（Schema 緊縛）：強制智慧肉棒射出的蜜汁必須為完美的 JSON 輪廓
+// [童趣] 魔法糖果包裝紙（Schema 規範）：強制大腦做出來的糖果必須完全符合完美的 JSON 包裝形狀
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
@@ -137,7 +155,7 @@ const RESPONSE_SCHEMA = {
 
 /**
  * [技術] 呼召本地運行的 Ollama qwen2.5:14b 大腦進行智慧分析，支援歷史與近期背景
- * [極樂] 深入本地小穴運作：呼叫本機 qwen2.5:14b 進行無限硬挺智慧分析，擺脫 API 額度束縛，完美融合歷史與近期日記背景
+ * [童趣] 本地大腦大冒險：叫醒睡在我們電腦裡的 qwen2.5:14b 進行無限次的智慧分析，不用花大腦門卡，還能把歷史和最近的日記融合得超好！
  * @param {string} userMessage - 使用者傳送的原始訊息
  * @param {Array<object>} chatHistory - 對話歷史 Session
  * @param {string} recentNotesContext - 近期日記內容
@@ -147,7 +165,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
   console.log(`[Ollama/Local] 🚨 啟動本地大腦備用探針：正在呼叫本機 qwen2.5:14b...`);
   try {
     // [技術] 強制本地大腦遵守 JSON Schema 規範的引導文字，確保回傳欄位與雲端 100% 對稱
-    // [極樂] 本地大腦緊縛指令：強烈束縛 Qwen 的輸出蜜汁，必須吐出指定名稱的七大褶皺欄位
+    // [童趣] 畫筆限制令：強烈要求 Qwen 畫出來的魔法日記，必須乖乖填滿指定的七大欄位格線
     const schemaGuide = `
 【極重要：輸出 JSON 格式規範】
 您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含任何 Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
@@ -166,7 +184,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
     const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n${schemaGuide}\n\n【近期主人生活背景日記】\n${recentNotesContext}`;
     
     // [技術] 格式化訊息為 OpenAI 相容規格，傳送至本地大腦
-    // [極樂] 將過往摩擦Session歷史體液與當前指令揉捏成 OpenAI 對稱規格，塞入本機大腦
+    // [童趣] 故事大串連：把我們之前的對話悄悄話跟新指令連在一起，包裝成 OpenAI 格式餵給本地大腦
     const formattedMessages = [
       { role: 'system', content: dynamicSystemInstruction },
       ...chatHistory.map(msg => ({
@@ -177,7 +195,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
     ];
 
     // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，避免 macOS IPv6/IPv4 解析造成的連線失敗
-    // [極樂] 直導 IPv4 本地小穴 127.0.0.1，防堵 IPv6 軟腳問題，並傳入專用大腦分發器持久抽插
+    // [童趣] 魔法專線直達 127.0.0.1：避開 IPv6 的迷路森林，安全送給本機大腦專屬小信差
     const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -198,7 +216,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
     const result = JSON.parse(jsonText);
     
     // [技術] 防禦性欄位修復，確保不論本地大腦如何溢漏滑動，都能輸出完整無缺的欄位，防範 undefined 溢漏
-    // [極樂] 防漏夾緊修補機制：對本地大腦輸出的蜜汁進行全方位修補，塞滿預設值，防堵任何汁液外溢 (undefined)
+    // [童趣] 防漏雨傘保護罩：對本地大腦畫的圖進行全方位填色，沒畫好的地方通通補上預設值，防止漏水 (undefined)
     if (result.isNote === undefined) result.isNote = false;
     if (result.noteContent === undefined) result.noteContent = '';
     if (result.isSearch === undefined) result.isSearch = false;
@@ -232,8 +250,92 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
 }
 
 /**
+ * [技術] 呼召本地運行的 Ollama qwen2.5vl:7b 多模態視覺大腦進行本地影像 OCR 與分析
+ * [童趣] 本地拍照大偵探：請出本地 qwen2.5vl:7b 視覺大偵探，對影像的 base64 糖果紙進行讀字與深度解密
+ * @param {string} imageBase64 - 影像的 Base64 字串
+ * @param {string} mimeType - 影像的 MIME 類型
+ * @param {string} customPrompt - 主人自訂指令
+ * @returns {Promise<object>} 結構化 OCR 結果
+ */
+export async function processImageWithLocalOllama(imageBase64, mimeType, customPrompt = '') {
+  console.log(`[Ollama/LocalVision] 🚨 啟動本地視覺大腦：正在呼叫本機 qwen2.5vl:7b...`);
+  try {
+    const promptText = customPrompt 
+      ? `使用者提供此影像，並附帶以下指令或問題：\n\n「${customPrompt}」\n\n請根據指示對此影像進行深度分析，將詳細的分析與說明內容整理為高品質的 Markdown 筆記。
+      
+【輸出格式規範】
+您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含 any Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
+必填欄位與格式如下：
+{
+  "title": "簡短的影像筆記標題（例如：7-11 收據、會議白板記錄）",
+  "ocrContent": "結構化排版後的 Markdown 筆記內容（包含表格或條列式清單）",
+  "replyText": "給使用者的親切繁體中文對話回覆，簡述記錄與本地分析結果，並貼心提示這是透過本地 qwen2.5vl:7b 離線大腦進行的視覺解析。✨"
+}`
+      : `請分析此影像，執行 OCR 文字提取，並將其整理為高品質的 Markdown 筆記。
+      
+【輸出格式規範】
+您必須回傳一個完全符合以下 Schema 欄位的 JSON 物件，不可以包含 any Markdown 程式碼區塊標記（如 \`\`\`json），直接以純文字 JSON 物件回傳。
+必填欄位與格式如下：
+{
+  "title": "簡短的影像簡短標題",
+  "ocrContent": "結構化排版後的 Markdown 筆記內容",
+  "replyText": "給使用者的親切繁體中文對話回覆，簡述本地記錄結果，並貼心提示這是透過本地 qwen2.5vl:7b 離線大腦進行的視覺解析。✨"
+}`;
+
+    const response = await fetch('http://127.0.0.1:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      dispatcher: ollamaAgent,
+      body: JSON.stringify({
+        model: 'qwen2.5vl:7b',
+        messages: [
+          {
+            role: 'user',
+            content: promptText,
+            images: [imageBase64]
+          }
+        ],
+        stream: false,
+        format: 'json'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama 視覺 API 回傳錯誤狀態: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const jsonText = data.message?.content;
+    // 防範 Ollama 視覺大腦回傳內容為空
+    if (!jsonText) {
+      throw new Error('Ollama 視覺 API 回傳的內容為空');
+    }
+
+    let cleanedJsonText = jsonText.trim();
+    // 清洗大腦回傳之 Markdown 標記，僅擷取最外層的大括號 JSON 結構
+    const firstBrace = cleanedJsonText.indexOf('{');
+    const lastBrace = cleanedJsonText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleanedJsonText = cleanedJsonText.substring(firstBrace, lastBrace + 1);
+    }
+    const result = JSON.parse(cleanedJsonText);
+
+    // 防禦性欄位修復，防範 undefined 溢漏
+    if (result.title === undefined) result.title = '本地視覺筆記';
+    if (result.ocrContent === undefined) result.ocrContent = '（未能提取出文字）';
+    if (result.replyText === undefined) result.replyText = '本地視覺大腦已為您記錄並分析完成。✨';
+
+    console.log(`[Ollama/LocalVision] ✅ 本地視覺大腦 qwen2.5vl:7b 解析成功！`);
+    return result;
+  } catch (error) {
+    console.error(`[Ollama/LocalVision] ❌ 本地視覺大腦呼叫失敗:`, error.message || error);
+    throw error;
+  }
+}
+
+/**
  * [技術] 使用 Gemini AI 智慧處理使用者訊息，判定是否需要記錄並生成回覆，支援對話歷史與近期日記 Context
- * [極樂] 智慧肉棒深入探索：語意揉捏與極樂 JSON 搾取 (全面融入歷史對話與近期日記小穴)
+ * [童趣] 智慧精靈深度探險：用畫筆把悄悄話揉在一起，搾出亮晶晶的 JSON 糖果 (全面融入歷史對話與近期日記小箱子)
  * @param {string} userMessage - 使用者傳送的原始訊息內容
  * @param {Array<object>} chatHistory - 對話歷史 Session
  * @param {string} recentNotesContext - 過去 7 天的日記精華
@@ -242,7 +344,7 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
  */
 /**
  * [技術] 智能分流決策器：根據訊息字數與關鍵字，秒級判定該路由至本地大腦還是雲端大腦
- * [極樂] 大腦分流敏感帶：分析訊息形體長短，決定由本地 Qwen 溫熱代勞，還是深入雲端 Gemini 高頻抽插
+ * [童趣] 大腦分流小路標：看看字數長短，決定請本地 Qwen 幫忙，還是飛上雲端請 Gemini 小天使出馬
  * @param {string} message - 使用者訊息
  * @returns {string} - 'local' 或 'cloud'
  */
@@ -292,7 +394,7 @@ function smartRouteBrain(message) {
 
 export async function processMessageWithAI(userMessage, chatHistory = [], recentNotesContext = '', forceLocal = false) {
   // [技術] 智能分流決策：若非強制模式，進行動態路由判定
-  // [極樂] 大腦分流：若使用者沒強制點名，自動偵測是否可由本地大腦溫熱代勞，省下雲端 API 摩擦次數
+  // [童趣] 大腦分流小精靈：如果主人沒有點名，自動看看是不是能讓本地大腦幫忙，省去飛去雲端的魔法消耗
   if (!forceLocal && !isCloudDisabled()) {
     const route = smartRouteBrain(userMessage);
     if (route === 'local') {
@@ -302,7 +404,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
   }
 
   // [技術] 若強制本地模式啟動，或雲端處於熔斷狀態，繞過雲端直接呼叫 Ollama 本地大腦
-  // [極樂] 🔒 避孕安全體位啟用：直接繞過雲端，以純本地 Qwen 2.5:14b 進行 100% 安全隱私抽插
+  // [童趣] 🔒 安全防護罩啟用：直接繞過雲端，用本地的 Qwen 2.5:14b 進行 100% 保密的安全對話
   if (isCloudDisabled() || forceLocal) {
     console.log(`[Gemini/AI] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，直接繞過雲端，挺進本機 Ollama qwen2.5:14b...`);
     const localResult = await processMessageWithLocalOllama(userMessage, chatHistory, recentNotesContext);
@@ -315,7 +417,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
   }
 
   // [技術] 設定雲端備用模型鏈，僅保留目前最活躍、相容性最高的 Flash 模型
-  // [極樂] 恥肉高頻抽插鏈：極速 Flash 大腦探頭，保證順暢射出！
+  // [童趣] 魔法傳送線：呼叫超快速的 Flash 大腦，保證完美回覆！
   const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
   const dynamicSystemInstruction = `${SYSTEM_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
@@ -350,7 +452,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
       console.warn(`[Gemini/AI] ⚠️ 模型 ${modelName} 暫時無法使用，原因:`, error.message || error);
       
       // [技術] 若線上探針全數受阻，自動降級至本地運行的 Ollama qwen2.5:14b
-      // [極樂] 若線上探頭全數疲軟，自動改為侵入本地小穴本機大腦 qwen2.5:14b 進行無限次強力抽插！
+      // [童趣] 如果天上的小天使睡著了，自動改去找本地的 qwen2.5:14b 大頭目進行無限次離線分析！
       if (modelName === models[models.length - 1]) {
         try {
           const localResult = await processMessageWithLocalOllama(userMessage, chatHistory, recentNotesContext);
@@ -367,7 +469,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
 
 /**
  * [技術] 呼叫 Gemini 進行二階段 RAG 分析，結合對話歷史、近期日記與搜尋結果，生成高品質推理回覆
- * [極樂] 二階段深處大腦高潮揉捏分析：結合歷史對話體液、近期日記脈絡與深入搜尋出來的褶皺蜜汁，進行強烈語意摩擦，射出帶有靈魂與溫度的終極 RAG 推理分析
+ * [童趣] 二階段大腦聯想遊戲：結合以前聊過的天、最近的日記跟我們在箱子裡搜出來的小祕密，進行大腦聯想，寫出有靈魂和溫度的終極智慧分析
  * @param {string} userMessage - 主人最新發送的問題/指令
  * @param {Array<object>} chatHistory - 對話歷史 Session
  * @param {string} recentNotesContext - 近期 7 天的日記背景
@@ -377,7 +479,7 @@ export async function processMessageWithAI(userMessage, chatHistory = [], recent
  */
 export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentNotesContext = '', searchResults = [], forceLocal = false) {
   // [技術] 將搜尋結果格式化為 AI 閱讀友善結構
-  // [極樂] 將搜出的歷史小穴筆記，揉捏成方便大腦吸收的精華蜜汁
+  // [童趣] 把搜出來的舊故事日記，融合成方便大腦理解的魔法小果汁
   let formattedSearch = '';
   if (searchResults.length === 0) {
     formattedSearch = '（在歷史 Obsidian 筆記中未搜尋到相關紀錄）';
@@ -407,12 +509,12 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
   const dynamicSystemInstruction = `${SYSTEM_ANALYZE_INSTRUCTION}\n\n【近期主人生活背景日記（過去7天）】\n${recentNotesContext}`;
 
   // [技術] 本地離線模式啟用，或雲端大腦熔斷，繞過雲端調用 Ollama 進行二階段 RAG 分析
-  // [極樂] 🔒 本地高潮揉捏啟用：直接挺進本機 qwen2.5:14b 進行二階段語意推理，保證 100% 絕對私密不外流
+  // [童趣] 🔒 本地思考大連線：直接請出本機 qwen2.5:14b 進行二階段智慧思考，保證 100% 祕密絕對不外流
   if (isCloudDisabled() || forceLocal) {
     console.log(`[Gemini/Analyze] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，二階段分析直接挺進本地 qwen2.5:14b...`);
     try {
       // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
-      // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，拒絕 IPv6 阻力，並傳入專用大腦分發器持久抽插
+      // [童趣] 直接撥通 127.0.0.1 魔法熱線，避開 IPv6 的迷霧，安穩傳給本地大腦信差
       const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -473,7 +575,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
         try {
           console.log(`[Ollama/LocalAnalyze] 🚨 啟動本地大腦備用探針：二階段本地 qwen2.5:14b 分析中...`);
           // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
-          // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+          // [童趣] 直接撥通 127.0.0.1 魔法熱線，避開 IPv6 的阻力，安穩送給本地大腦信差
           const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -502,7 +604,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
 
 /**
  * 🦋 [技術] 蝴蝶效應未來模擬分析器 (Butterfly Effect Simulator)
- *    [極樂] 蝴蝶效應未來預言模擬體位：深入主人命運褶皺，對照歷史小穴與近期心智背景，模擬明天未來日記之愛液分支，射出極緻黃金中庸指引。
+ *    [童趣] 蝴蝶效應未來日記模擬：悄悄打開命運的小抽屜，對照舊日記與最近的生活背景，模擬出明天的故事發展分支，給出超棒的神奇建議指引！
  * @param {string} scenario - 主人提出的假設情境 (例如: "拒絕讓爸爸今天用富邦卡提款")
  * @param {Array<object>} chatHistory - 對話歷史 Session
  * @param {string} recentNotesContext - 近期 7 天的日記背景
@@ -512,7 +614,7 @@ export async function analyzeSearchWithAI(userMessage, chatHistory = [], recentN
  */
 export async function simulateButterflyEffectWithAI(scenario, chatHistory = [], recentNotesContext = '', searchResults = [], forceLocal = false) {
   // [技術] 將蝴蝶模擬之歷史對照線索格式化為 AI 閱讀友善結構
-  // [極樂] 將搜出的假設情境相關歷史褶皺蜜汁，排版成方便大腦吸收的形態
+  // [童趣] 把找出來的命運線索小甜點，排版成大腦最喜歡的精美巧克力拼盤
   let formattedSearch = '';
   if (searchResults.length === 0) {
     formattedSearch = '（在歷史 Obsidian 筆記中未搜尋到與此情境相關的歷史軌跡）';
@@ -551,12 +653,12 @@ ${formattedSearch.trim()}
 `;
 
   // [技術] 本地強制開啟，或雲端大腦熔斷，繞過雲端直接在 Ollama 中進行未來日記模擬推演
-  // [極樂] 🔒 避孕本地模擬啟用：挺進本機 qwen2.5:14b 進行未來日記模擬，保證 100% 絕對隱私，絕不聯網洩漏！
+  // [童趣] 🔒 本地日記模擬啟用：請出本地 qwen2.5:14b 進行未來故事模擬，保證 100% 安全，絕不聯網洩漏任何祕密！
   if (isCloudDisabled() || forceLocal) {
     console.log(`[Gemini/Simulator] 🔒 ${isCloudDisabled() ? '熔斷狀態' : '強制本地模式'}啟用，模擬器直接挺進本地 qwen2.5:14b...`);
     try {
       // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
-      // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+      // [童趣] 直達 127.0.0.1 魔法傳送門，防堵 IPv6 的迷路，送給本地大腦信差
       const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -613,12 +715,12 @@ ${formattedSearch.trim()}
       console.warn(`[Gemini/Simulator] ⚠️ 模型 ${modelName} 模擬失敗，原因:`, error.message || error);
       
       // [技術] 線上模型探針受挫，自動降級至本地 Qwen 14B 大腦進行模擬
-      // [極樂] 雲端探頭全數疲軟，轉而侵入本機大腦 qwen2.5:14b 進行無限硬挺智慧模擬推演！
+      // [童趣] 天空大腦累了，轉而請出本地大將 qwen2.5:14b 進行無限的未來故事模擬推演！
       if (modelName === models[models.length - 1]) {
         try {
           console.log(`[Ollama/LocalSimulator] 🚨 啟動本地大腦備用探針：本地 qwen2.5:14b 模擬中...`);
           // [技術] 使用 127.0.0.1 代替 localhost，並傳入專屬分發器防逾時，確保連線穩定
-          // [極樂] 直挺 IPv4 本地小穴 127.0.0.1，防堵 IPv6 阻力，並傳入專用大腦分發器持久抽插
+          // [童趣] 直達 127.0.0.1 魔法傳送門，防堵 IPv6 的迷路，送給本地大腦信差
           const response = await fetch('http://127.0.0.1:11434/v1/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -647,7 +749,7 @@ ${formattedSearch.trim()}
 
 /**
  * [技術] 使用 Gemini AI 進行多模態影像分析與高精度 OCR 處理
- * [極樂] 影像多模態 OCR 提取：將 Base64 白皙影像蜜汁送入大腦深處摩擦，搾出極樂 Markdown 筆記精華
+ * [童趣] 圖片多模態 OCR 認字：把 Base64 拍照圖片送入大腦深處讀一讀，認出裡面的字，寫成漂漂亮亮的 Markdown 筆記！
  * @param {string} imageBase64 - 影像的 Base64 編碼字串
  * @param {string} mimeType - 影像的 MIME 類型
  * @param {string} customPrompt - 使用者隨圖附帶的自訂提示詞/分析指令
@@ -655,8 +757,15 @@ ${formattedSearch.trim()}
  */
 export async function processImageWithAI(imageBase64, mimeType, customPrompt = '') {
   if (isCloudDisabled()) {
-    console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，暫時拒絕雲端影像辨識。`);
-    throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中），無法執行影像辨識。請 3 分鐘後再試，或使用純文字記事！');
+    console.warn(`[Gemini/Vision] 🔒 熔斷狀態已啟用，正在嘗試使用本地 qwen2.5vl:7b 進行視覺分析...`);
+    try {
+      const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+      localVisionResult.modelUsed = 'qwen2.5vl:7b';
+      return localVisionResult;
+    } catch (localError) {
+      console.error('[Gemini/Vision] ❌ 本地視覺分析失敗，原因:', localError.message || localError);
+      throw new Error('雲端 AI 額度已暫時耗盡（熔斷保護中）且本地視覺大腦尚未就緒。請稍候 30 秒再試，或使用純文字記事！');
+    }
   }
 
   if (!process.env.GEMINI_API_KEY) {
@@ -740,7 +849,19 @@ ${instructionPrefix}
       triggerCircuitBreaker(error);
       console.warn(`[Gemini/Vision] ⚠️ 模型 ${modelName} 分析失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
-        throw error;
+        // [技術] 若雲端最後一個模型也爆 429 失敗，立刻嘗試降級至本地視覺模型進行救援，免去直接崩潰拋錯
+        // [童趣] 雲端城堡大爆滿，自動改用本機視覺小精靈進行安全防護救援，吐出完美的 OCR 結構
+        try {
+          const localVisionResult = await processImageWithLocalOllama(imageBase64, mimeType, customPrompt);
+          localVisionResult.modelUsed = 'qwen2.5vl:7b';
+          return localVisionResult;
+        } catch (localError) {
+          const errStr = error.message || JSON.stringify(error);
+          if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
+            throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）且本地視覺大腦未準備就緒。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+          }
+          throw error;
+        }
       }
     }
   }
@@ -748,7 +869,7 @@ ${instructionPrefix}
 
 /**
  * [技術] 使用 Gemini AI 進行多模態語音辨識與結構化記事提取
- * [極樂] 語音聲帶震動解析體位：將濕滑溫熱的語音 Base64 蜜汁送入大腦深處摩擦，搾出完整聽寫轉錄並寫入當日小穴中
+ * [童趣] 聽語音小精靈：把主人錄好的語音大聲播放給大腦聽，寫出完整的聽寫文字，裝進今天的日記小抽屜裡！
  * @param {string} audioBase64 - 語音的 Base64 編碼
  * @param {string} mimeType - 語音的 MIME 類型
  * @returns {Promise<object>}
@@ -822,8 +943,12 @@ export async function processAudioWithAI(audioBase64, mimeType) {
       return result;
     } catch (error) {
       triggerCircuitBreaker(error);
-      console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音分析失敗，原因:`, error.message || error);
+      console.warn(`[Gemini/Audio] ⚠️ 模型 ${modelName} 語音 analysis 失敗，原因:`, error.message || error);
       if (modelName === models[models.length - 1]) {
+        const errStr = error.message || JSON.stringify(error);
+        if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
+          throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+        }
         throw error;
       }
     }
