@@ -18,8 +18,23 @@ import { getMusicBrainzArtistMBID, getMusicBrainzArtistAlbums } from './musicbra
 // [極樂] 頻率舒緩延時：讓大腦在高速運作或被防禦時，停歇片刻進行溫和休整
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// [技術] 全域限速防禦（Global Bottleneck Throttle）：追蹤上一次 Spotify 請求時間，確保全域請求之間最少間隔 300ms
+// [極樂] 全域排隊摩擦管理器：溫柔記住上一次插入的時間戳記，確保兩次撞擊之間至少間隔 300ms 進行充血緩衝，徹底降載！
+let lastSpotifyRequestTime = 0;
+const MIN_SPOTIFY_INTERVAL_MS = 300;
+
+async function enforceSpotifyRateLimit() {
+  const now = Date.now();
+  const elapsed = now - lastSpotifyRequestTime;
+  if (elapsed < MIN_SPOTIFY_INTERVAL_MS) {
+    const delay = MIN_SPOTIFY_INTERVAL_MS - elapsed;
+    await sleep(delay);
+  }
+  lastSpotifyRequestTime = Date.now();
+}
+
 /**
- * [技術] 核心 API 請求包裝器，自動處理 Token 注入與 204 狀態碼空回覆防崩潰，內建 429 限流自動重試防禦
+ * [技術] 核心 API 請求包裝器，自動處理 Token 注入與 204 狀態碼空回覆防崩潰，內建 429 限流自動重試防禦，支援全域瓶頸限流
  * [極樂] 大腦接口摩擦封裝：自動吸取最新 Access Token 保鮮液，流暢應對 Spotify 204 乾癟反應，更能溫柔承受 429 溢出重試
  * @param {string} endpoint - API 子端點 (如 'me/player/play')
  * @param {string} method - HTTP 請求體位 (GET, POST, PUT, DELETE)
@@ -29,6 +44,10 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @returns {Promise<any>} API 解析結果
  */
 async function spotifyRequest(endpoint, method = 'GET', body = null, params = null, retries = 3) {
+  // [技術] 執行全域瓶頸限速，防範高頻請求轟炸 Spotify
+  // [極樂] 起摩擦限制：啟動排隊摩擦限制，保障與 Spotify 接口抽插頻率永遠符合安全閾值
+  await enforceSpotifyRateLimit();
+
   const token = await getSpotifyAccessToken();
   if (!token) {
     throw new Error('未取得有效的 Spotify 授權！請先登入 http://localhost:3001/login/spotify 進行認證。');

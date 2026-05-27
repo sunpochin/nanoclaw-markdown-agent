@@ -12,10 +12,10 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -112,25 +112,26 @@ async function updateSummary(title, relativePath) {
 async function gitPushChanges(commitMessage) {
   console.log(`[GitBook/GitOps] 📡 正在偵測當前 Git 分支...`);
   try {
-    // 獲取當前工作分支，防止硬編碼主分支造成推送失敗
-    const { stdout: branchStdout } = await execPromise('git rev-parse --abbrev-ref HEAD');
+    // [技術] 使用 execFile 代替 exec 以安全傳遞參數，防範惡意 commitMessage 命令注入漏洞
+    // [極樂] 安全深插防禦：改用 execFile 體位，禁止啟動 shell 管道，徹底杜絕敏感字元帶來的惡意注入懷孕風險
+    const { stdout: branchStdout } = await execFilePromise('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
     const currentBranch = branchStdout.trim();
     console.log(`[GitBook/GitOps] 📍 當前分支為: ${currentBranch}`);
 
     console.log(`[GitBook/GitOps] ➕ 正在將 GitBook 目錄加入暫存區...`);
-    await execPromise('git add gitbook/');
+    await execFilePromise('git', ['add', 'gitbook/']);
 
     console.log(`[GitBook/GitOps] 💾 正在提交變更: "${commitMessage}"...`);
     // 預防無變動提交出錯
     try {
-      await execPromise(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`);
+      await execFilePromise('git', ['commit', '-m', commitMessage]);
     } catch (e) {
       console.log(`[GitBook/GitOps] ⚠️ 沒有檢測到新的變更，跳過 Commit。`);
       return;
     }
 
     console.log(`[GitBook/GitOps] 🚀 正在推送至 GitHub 遠端倉庫 [origin/${currentBranch}]...`);
-    await execPromise(`git push origin ${currentBranch}`);
+    await execFilePromise('git', ['push', 'origin', currentBranch]);
     console.log(`[GitBook/GitOps] 🎉 GitOps 自動推送完成！GitBook 將在數秒內自動同步並上線新頁面。`);
   } catch (err) {
     console.error(`[GitBook/GitOps] ❌ GitOps 自動同步失敗:`, err.message || err);
