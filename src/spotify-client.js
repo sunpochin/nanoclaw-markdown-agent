@@ -410,10 +410,12 @@ export async function scanRecentNewReleases(days = 30, batchSize = 15) {
     console.log(`[Spotify/Scanner] 💾 成功自本地狀態庫載入 ${followedArtists.length} 位歷史藝人進行降級掃描。`);
   }
 
-  // 將藝人依照最後掃描時間排序，最久沒掃或未曾掃過的排最前面
+  // 將藝人依照最後掃描時間排序，最久沒掃或未曾掃過的排最前面 (防範日期解析為 NaN 導致排序不穩定)
   let sortedArtists = [...followedArtists].sort((a, b) => {
-    const timeA = scannerState[a.id]?.last_scanned_at ? new Date(scannerState[a.id].last_scanned_at).getTime() : 0;
-    const timeB = scannerState[b.id]?.last_scanned_at ? new Date(scannerState[b.id].last_scanned_at).getTime() : 0;
+    const dateA = scannerState[a.id]?.last_scanned_at ? new Date(scannerState[a.id].last_scanned_at) : null;
+    const dateB = scannerState[b.id]?.last_scanned_at ? new Date(scannerState[b.id].last_scanned_at) : null;
+    const timeA = dateA && !isNaN(dateA.getTime()) ? dateA.getTime() : 0;
+    const timeB = dateB && !isNaN(dateB.getTime()) ? dateB.getTime() : 0;
     return timeA - timeB;
   });
 
