@@ -300,11 +300,12 @@ async function handleLineEvent(event) {
       await writeNoteToMarkdown(noteContent);
 
       // 5. 回覆使用者解析結果
+      const finalMessage = `${ocrResult.replyText}\n\n──────────────────\n\n📝【儲存的筆記內容】\n${ocrResult.ocrContent}`;
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: ocrResult.replyText
+          text: finalMessage
         }]
       });
     } catch (error) {

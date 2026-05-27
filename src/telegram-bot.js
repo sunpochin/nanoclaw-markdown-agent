@@ -415,10 +415,15 @@ ${processList}
         }
 
         // 記錄進對話歷史 Session
+        const finalMessage = `${result.replyText}\n\n──────────────────\n\n📝 **【儲存的筆記內容】**\n${result.ocrContent}`;
+        
         appendToTelegramSession(chatId, 'user', `[圖片訊息] ${customPrompt}`);
-        appendToTelegramSession(chatId, 'model', result.replyText);
+        appendToTelegramSession(chatId, 'model', finalMessage);
 
-        return bot.sendMessage(chatId, result.replyText);
+        return bot.sendMessage(chatId, finalMessage, { parse_mode: 'Markdown' }).catch((err) => {
+          console.warn('[Telegram/Vision] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+          return bot.sendMessage(chatId, finalMessage);
+        });
       } catch (err) {
         if (loadingInterval) clearInterval(loadingInterval);
         if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
