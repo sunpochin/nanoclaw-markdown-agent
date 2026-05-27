@@ -9,34 +9,34 @@
 ### ✅ 已完成事項 (Completed Features)
 
 1.  **專案初始化**：建立專案資料夾並配置 `package.json`，安裝 Express、`@line/bot-sdk` 與 `@google/genai` 等必要依賴套件。
-2.  **Obsidian 儲存小穴管理 (`src/markdown-service.js`)**：
+2.  **Obsidian 儲存魔法小抽屜管理 (`src/markdown-service.js`)**：
     *   實作自動建立與檢測本地/iCloud 儲存路徑（已配置指向您的 iCloud Drive `nanoclaw_notes` 資料夾）。
     *   以當天日期為檔名（如 `YYYY-MM-DD.md`），以 append 模式將寫入內容追加於檔案尾端。
-    *   實作 **「緊緻褶皺防漏對齊排版」**：對多行文字筆記自動實施首行直接深入，後續行數側身縮排 4 格空白，完美對齊 Markdown 列表 `*`，防止渲染排版溢漏。
+    *   實作 **「乖乖排隊防漏對齊排版」**：對多行文字筆記自動實施首行直接排在最前，後續行數側身縮排 4 格空白，完美對齊 Markdown 列表 `*`，防止渲染排版溢漏。
     *   實作關鍵字搜尋歷史筆記功能 (`searchNotesInVault`)、讀取近期 7 天日記精華功能 (`readRecentNotesContext`)，以及儲存未來決策模擬報告功能 (`writeSimulationReportToMarkdown`)。
 3.  **LINE Webhook 系統中樞 (`server.js`)**：
-    *   部署 **「緊緻防禦之恥肉中間件」**，嚴格對接並驗證 LINE webhook 的雜湊簽章，保障本地伺服器安全。
+    *   部署 **「城堡驗證大門中間件」**，嚴格對接並驗證 LINE webhook 的雜湊簽章，保障本地伺服器安全。
     *   提供對話對端 REST APIs (`GET /api/notes` 與 `GET /api/notes/:date`) 用於列出與讀取隨手記。
 4.  **多模態 OCR 影像分析與排版**：
     *   支援 LINE 傳送實體發票、手寫筆記、白板、螢幕截圖照片。
     *   自動解析 MIME 類型，轉換為 Base64 數據流送至 Gemini 多模態探針，將收據自動提取並整理成 Markdown 結構表格存入每日隨手記。
 5.  **多模態語音轉錄記事**：
     *   支援 LINE 語音訊息，直接將聲帶震動音波轉為精準繁體中文，提取記事內容自動寫入當日筆記，並自動回覆親切聽寫確認。
-6.  **對話快感記憶帶 (Session Memory)**：
-    *   在 `server.js` 部署 `userSessions` 記憶池，溫熱保存最近 15 輪的對話歷史，拒絕冰冷的一夜情式無狀態對話。
+6.  **對話小記憶寶盒 (Session Memory)**：
+    *   在 `server.js` 部署 `userSessions` 記憶池，溫暖保存最近 15 輪的對話歷史，拒絕冰冷的一夜情式無狀態對話。
 7.  **二階段 Hybrid RAG 語意推理大腦 (Two-stage RAG)**：
     *   Gemini 第一階段進行意圖分類（記事、搜尋、未來模擬、一般閒聊）。
-    *   當主人提問涉及歷史時，自動呼叫本地關鍵字檢索，並融合：**Obsidian 歷史搜尋結果** + **過去 7 日日記精華事實** + **當前對話歷史 Session**，進入第二階段 Gemini `analyzeSearchWithAI` 深度揉捏，產出跨越時空的高智商語意關聯推理分析。
+    *   當主人提問涉及歷史時，自動呼叫本地關鍵字檢索，並融合：**Obsidian 歷史搜尋結果** + **過去 7 日日記精華事實** + **當前對話歷史 Session**，進入第二階段 Gemini `analyzeSearchWithAI` 深度聯想，產出跨越時空的高智商語意關聯推理分析。
 8.  **本地 qwen2.5:14b 離線備用大腦 (Local Fallback)**：
-    *   在 `gemini-service.js` 部署本地備用探棒。當線上 Gemini API 額度枯竭或受阻時，無縫切換至本地沙盒運行的 `qwen2.5:14b`，實行無限制、高強度的離線大腦抽插。
+    *   在 `gemini-service.js` 部署本地備用探棒。當線上 Gemini API 額度枯竭或受阻時，無縫切換至本地沙盒運行的 `qwen2.5:14b`，實行無限制、高強度的離線大腦思考。
 9.  **純本地離線一鍵切換模式 (`#local`)**：
-    *   發送 `#local`、`#本地` 或 `#離線`，即可一鍵切換雲端 Gemini 大腦與本機運行之 Qwen 2.5:14b 大腦，實現 100% 離線、絕對私密、防數據溢漏的黃金安全套隨手記環境！
+    *   發送 `#local`、`#本地` 或 `#離線`，即可一鍵切換雲端 Gemini 大腦與本機運行之 Qwen 2.5:14b 大腦，實現 100% 離線、絕對私密、防數據外流的魔法安全隨手記環境！
 10. **🦋 蝴蝶效應未來模擬器 (simulateButterflyEffectWithAI)**：
     *   **黑科技功能落地**！當發送「如果我今天拒絕給爸爸簽帳卡會怎樣？」這類假設性決策時，大腦會自動啟動未來日記沙盒。
     *   結合當前情境、近期 7 天日記心智氣候、歷史筆記行為模式，模擬三條全然不同的 **【明日未來日記】分支**：
-        *   **【分支 A：高摩擦力撞擊 (High Friction Collision)】**（直接衝突的寫實分支）
-        *   **【分支 B：流暢滑行之折衷防漏 (Lubricated Soft Landing)】**（情商替代折衷方案分支）
-        *   **【分支 C：自適應避暑冷卻 (Self-Adaptive Cooling)】**（拖延與委曲求全代價分支）
+        *   **【分支 A：勇敢面對直接向前跑 (Direct Approach)】**（直接衝突的寫實分支）
+        *   **【分支 B：繞個彎溫和降落 (Gentle Workaround)】**（情商替代折衷方案分支）
+        *   **【分支 C：小精靈悄悄躲雨 (Self-Adaptive Cooldown)】**（拖延與委曲求全代價分支）
     *   同時給予高層次、務實可操作的 **「💡 大腦智慧指引」**，並**自動將此份精美的 Markdown 未來日記預測報告，寫入您當天的 Obsidian 隨手記中存檔**！
 11. **安全遠端系統監控與冷卻通道 (`#status` / `#kill` / Auto-Cooler)**：
     *   僅允許柏青（Secure User ID）透過 LINE 發送指令查詢 Mac Mini 系統發熱進程（Top CPU/RAM 進程）並進行遠端進程強制結束（`#kill`）。
@@ -56,17 +56,17 @@
 本專案支援前台開發模式與後台守護犬（PM2）兩種啟動體位：
 
 *   **體位 A：PM2 後台永動守護（極力推薦！關閉 Terminal / 開機自動啟動）**
-    ```bash
-    # 使用配置好的設定檔在後台啟動服務並持續監聽
-    npx pm2 start ecosystem.config.cjs
-    ```
-    > 關於 PM2 免 Sudo 安全通道與生理感官隱喻的詳細說明，請參閱：[PM2_DAEMON_GUIDE.md](file:///Users/pac/codes/nanoclaw-markdown-agent/PM2_DAEMON_GUIDE.md)。
+     ```bash
+     # 使用配置好的設定檔在後台啟動服務並持續監聽
+     npx pm2 start ecosystem.config.cjs
+     ```
+     > 關於 PM2 免 Sudo 安全通道與童話隱喻的詳細說明，請參閱：[PM2_DAEMON_GUIDE.md](file:///Users/pac/codes/nanoclaw-markdown-agent/PM2_DAEMON_GUIDE.md)。
 
 *   **體位 B：前台直覺除錯模式**
-    ```bash
-    # 使用開發模式啟動，前台即時輸出日誌
-    npm run dev
-    ```
+     ```bash
+     # 使用開發模式啟動，前台即時輸出日誌
+     npm run dev
+     ```
 
 
 ### 3. 對接 LINE Webhook
@@ -92,11 +92,10 @@ ngrok http 3000
     *   自動將記錄的事情歸納為「生活」、「照護」、「工作」、「健康」，生成漂亮的 Markdown 熱力圖，在 Obsidian 中更為美觀。
 3.  **聯網搜尋工具集成計畫 (Web Search Integration Fallback)**：
     *   `[技術]`：當本地 RAG 全文搜尋無匹配紀錄，或 AI 語意判別提問需要即時時事時，自動觸發聯網搜尋 API（如 Tavily AI 免費方案或 DuckDuckGo 免金鑰爬蟲備援），取得這星期最新的發行資訊或時事，作為二階段 RAG 的動態上下文餵給 LLM，並主動引導主人一鍵將最新資訊安全排版寫入今日 Obsidian 筆記中。
-    *   `[極樂]`：外界網路體液交流體位：當本地儲存小穴乾枯無水、遍尋不著過往的痕跡時，自動敞開大門，挺進無限的外部網際網路褶皺深處，主動搾取最新鮮的熱騰騰時事蜜汁，滋潤乾乾的筆記本！
+    *   `[童趣]`：外界網路探險：當本地的魔法小抽屜空空如也、找不到過往的線索時，自動敞開大門，飛向外部網際網路城堡最深處，主動採摘最新鮮的時事小音符，滋潤乾乾的筆記本！
 4.  **npm Package 核心抽取計畫 (nanoclaw-core 或 obsidian-ai-bridge)**：
     *   `[技術]`：將本專案具備強大差異性的三大核心技術提煉並發布為獨立的開源 npm package，包含：
         *   Markdown AST 級別的**「多層級縮排防溢漏對齊引擎 (`indentedContent` 算法)」**。
         *   離線備援的**「雙腦智慧熔斷器與 Ollama 自動降級機制 (`Hybrid AI Breaker`)」**。
         *   無需向量資料庫的**「輕量 Markdown RAG 與時間滑動窗口 Context 熔接器」**。
-    *   `[極樂]`：極樂工具發射器：將完美的緊緻對齊防溢漏體位與雙腦自適應抽插熔斷機制封裝為通用工具，讓更多開發者能夠輕鬆開發他們的個人小穴，享受高潮跌宕的離線/線上混合運算快感！
-
+    *   `[童趣]`：魔法工具箱：將完美的對齊防溢漏排版與雙腦自適應切換熔斷機制封裝為通用工具，讓更多開發者能夠輕鬆開發他們個人專屬的魔法小抽屜，享受離線與線上混合運算的快感！

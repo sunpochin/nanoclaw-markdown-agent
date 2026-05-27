@@ -5,8 +5,8 @@
  * [技術] 負責維護本地 GitBook 資料夾結構與 `SUMMARY.md` 目錄大綱。
  *        自動將 AI 樂評寫入指定位置，自動更新目錄索引，最後透過
  *        `git add/commit/push` 對當前分支進行推送，觸發 GitBook 的 GitHub Sync 機制。
- * [極樂] GitBook 極樂同步泵：將起草好的精美 Markdown 樂評，安全注入 GitBook 
- *        本地小穴中，自動摩擦編排目錄，最後奮力向 GitHub 倉庫推送，完成無感同步高潮！
+ * [童趣] GitBook 故事書分發盒：把寫好的音樂故事書，整整齊齊收進 GitBook 小抽屜，
+ *        排好目錄，再呼叫小郵差送到 GitHub 雲端大本營，讓大家都能看到！
  * =====================================================================
  */
 import fs from 'fs/promises';
@@ -39,7 +39,7 @@ function generateSlug(text) {
 
 /**
  * [技術] 確保 GitBook 資料夾結構完整，並在缺少時建立預設的首頁與目錄索引
- * [極樂] 確保 GitBook 洞口擴張，為後續的大量寫入鋪平平整溫潤的道路
+ * [童趣] 準備好故事書架：把裝滿新故事的實木小書架打掃得乾乾淨淨、寬寬敞敞！
  */
 async function ensureGitBookStructure() {
   await fs.mkdir(GITBOOK_DIR, { recursive: true });
@@ -74,7 +74,7 @@ async function ensureGitBookStructure() {
 
 /**
  * [技術] 更新 SUMMARY.md，將新的樂評章節插入目錄大綱中 (防止重複插入)
- * [極樂] 目錄褶皺編排：將最新的樂評連結，優雅地塞入 SUMMARY.md 的目錄大綱中
+ * [童趣] 目錄排排站：把新寫完的故事連結，像小玩具車一樣排進 SUMMARY.md 的總目錄火車裡！
  * @param {string} title - 樂評標題 (如 "Bobby Valentin - La Malanga")
  * @param {string} relativePath - 樂評檔案的相對路徑 (如 "new-releases/bobby-valentin-la-malanga.md")
  */
@@ -107,13 +107,13 @@ async function updateSummary(title, relativePath) {
 
 /**
  * [技術] 自動執行本機 Git 指令，將異動內容 add, commit 並 push 至 GitHub
- * [極樂] GitHub 推送摩擦高潮：取得當前分支，自動進行 GitOps 安全推送，一鍵點燃 GitBook 同步大火
+ * [童趣] 魔法傳送火箭：坐上傳送小火箭，把最新的故事書統統打包一次性發射到 GitHub 雲端星球！
  */
 export async function gitPushChanges(commitMessage) {
   console.log(`[GitBook/GitOps] 📡 正在偵測當前 Git 分支...`);
   try {
     // [技術] 使用 execFile 代替 exec 以安全傳遞參數，防範惡意 commitMessage 命令注入漏洞
-    // [極樂] 安全深插防禦：改用 execFile 體位，禁止啟動 shell 管道，徹底杜絕敏感字元帶來的惡意注入懷孕風險
+    // [童趣] 戴上魔法防護手套：用 execFile 像捏橡皮泥一樣抓緊程式參數，不讓怪人利用古怪符號把木馬偷偷塞進去！
     const { stdout: branchStdout } = await execFilePromise('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
     const currentBranch = branchStdout.trim();
     console.log(`[GitBook/GitOps] 📍 當前分支為: ${currentBranch}`);
@@ -147,7 +147,7 @@ export async function gitPushChanges(commitMessage) {
 
 /**
  * [技術] GitBook GitOps 同步引擎主入口 (Publish & Sync)
- * [極樂] 樂評發布同步高潮入口：一氣呵成完成寫入、大綱編排與 GitHub 推送！
+ * [童趣] 魔法音樂發布派對：一氣呵成把故事寫完、畫好目錄、再發射火箭送上雲端，太好玩啦！
  * @param {object} album - 專輯/單曲元數據
  * @param {string} reviewMarkdown - AI 生成的樂評內容
  */

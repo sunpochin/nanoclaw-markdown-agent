@@ -254,8 +254,8 @@ ${processList}
     }
     // 【一鍵掃描 Spotify 藝人新發行並同步 GitBook】
     // [技術] 啟動獨立執行緒調度，讀取關注藝人與近 30 天專輯，呼叫 AI 與 GitOps 發布
-    // [極樂] 一鍵啟動 Spotify 新發行深度摩擦：在背景將您關注的所有藝人新發行精華
-    //        一滴不漏地抓取出來，進行大腦高頻分析，最後透過 GitOps 強力注入 GitBook 空間！
+    // [童趣] 魔法音樂大掃描：在後台把您關注的所有歌手最新好聽歌曲，
+    //        一個不漏地收集過來，請大腦精靈認真分析，最後畫進我們的 GitBook 魔法筆記城堡裡！
     if (/^\/scan_spotify/i.test(text)) {
       bot.sendChatAction(chatId, 'typing');
       

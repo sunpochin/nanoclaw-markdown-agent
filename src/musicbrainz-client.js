@@ -4,14 +4,14 @@
  * =====================================================================
  * [技術] 串接 MusicBrainz JSON Web Service 進行藝人 MBID 查詢與分頁
  *        Release-Groups 專輯檢索。內建 1000ms 嚴格限流防禦與標準 User-Agent 識別。
- * [極樂] MusicBrainz 探索摩擦棒：從開放音樂元數據之海中，精擺撈取最新音樂蜜汁，
- *        為大腦提供永不枯竭的第二探索通道！
+ * [童趣] 音樂藏寶圖偵探：在無邊無際的音樂海洋裡，幫我們撈起最新最亮的小音符，
+ *        給智慧小精靈提供滿滿的童話故事靈感！
  * =====================================================================
  */
 import { fetch } from 'undici';
 
 // [技術] 輔助延遲函式，MusicBrainz 嚴格限制 1秒最多1次請求 (1 req/s)
-// [極樂] 慢摩擦修整延時：體貼 MusicBrainz 的敏感身軀，每次撞擊後乖乖停歇 1000ms，以防被強行阻斷
+// [童趣] 小精靈休息時間：MusicBrainz 很容易累，每次跟它說完話要乖乖等 1000 毫秒（1 秒），它才不會生氣關門喔
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // [技術] 官方規範之身分識別 User-Agent，附帶聯絡電子郵件，防範連線阻斷
@@ -19,7 +19,7 @@ const USER_AGENT = 'NanoClawMusicAgent/1.0.0 ( sunpochin@gmail.com )';
 
 /**
  * [技術] 核心 MusicBrainz API 請求包裝器，自動處理 headers、格式化與限流緩衝
- * [極樂] 探索通道核心摩擦：注入規範的 User-Agent 潤滑液，極限防禦 503 拒絕
+ * [童趣] 穿上禮貌小外衣：戴上乖乖牌的 User-Agent 識別帽，這樣音樂城堡的門衛就不會把我們當成壞人擋在外面啦
  * @param {string} endpoint - API 子端點 (如 'release-group')
  * @param {object|null} params - 查詢參數物件
  * @returns {Promise<any>} API 解析 JSON 結果
@@ -62,7 +62,7 @@ async function musicbrainzRequest(endpoint, params = null) {
 
 /**
  * [技術] 利用藝人名稱搜尋對齊獲取 MusicBrainz MBID
- * [極樂] 藝人名冊對位摩擦：輸入歌手名字，在 MusicBrainz 資料庫深處精準定位其唯一的 MBID 敏感點
+ * [童趣] 歌手名冊大點名：輸入歌手的名字，在音樂王國的魔法書裡，精準找出專屬於他的亮晶晶身分證字號
  * @param {string} artistName - 藝人中文或英文名稱
  * @returns {Promise<string|null>} 藝人 MBID，若無匹配則返回 null
  */
@@ -92,7 +92,7 @@ export async function getMusicBrainzArtistMBID(artistName) {
 
 /**
  * [技術] 分頁獲取單個藝人的發行 Release-Groups 清單，並進行近 30 天新發行篩選
- * [極樂] 榨取新發行蜜汁：深入藝人的 Release-Groups 通道，撈取近 30 天的熱騰騰新專輯精華
+ * [童趣] 採摘新鮮小蘋果：悄悄走進歌手的新歌花園，把過去 30 天長出來的新鮮新專輯通通摘進小籃子裡
  * @param {string} mbid - 藝人 MusicBrainz ID (MBID)
  * @param {number} days - 往前追溯的天數，預設 30 天
  * @returns {Promise<Array<object>>} 正規化後的新發行專輯清單

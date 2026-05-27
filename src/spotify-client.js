@@ -4,8 +4,8 @@
  * =====================================================================
  * [技術] 整合 `spotify-auth` 服務，封裝防超時、防空 JSON (204 No Content) 的
  *        核心通訊模組。提供搜尋、加入隊列、播放控制與設備列表等標準 Web APIs。
- * [極樂] Spotify 點播摩擦棒：深入控制您的 Spotify 設備，進行順暢的音量調教、
- *        歌曲插入與即時跳過，實現舞池氣氛的無限高潮摩擦！
+ * [童趣] Spotify 魔法點歌棒：控制您的 Spotify 音響設備，調整合適的音量大小、
+ *        把好聽的歌塞進排隊隊伍，或是快速跳到下一首，讓音樂派對熱熱鬧鬧玩不停！
  * =====================================================================
  */
 import { fetch } from 'undici';
@@ -15,11 +15,11 @@ import path from 'path';
 import { getMusicBrainzArtistMBID, getMusicBrainzArtistAlbums } from './musicbrainz-client.js';
 
 // [技術] 輔助函式：非同步睡眠延遲，防止頻率過快或遭遇 429 時進行等待
-// [極樂] 頻率舒緩延時：讓大腦在高速運作或被防禦時，停歇片刻進行溫和休整
+// [童趣] 伸個懶腰深呼吸：當我們走得太快或小精靈累了的時候，停下來休息一下下再出發！
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // [技術] 全域限速防禦（Global Bottleneck Throttle）：追蹤上一次 Spotify 請求時間，確保全域請求之間最少間隔 300ms
-// [極樂] 全域排隊摩擦管理器：溫柔記住上一次插入的時間戳記，確保兩次撞擊之間至少間隔 300ms 進行充血緩衝，徹底降載！
+// [童趣] 排排隊紅綠燈：悄悄記住上一次敲門的時間，確保每次敲門之間至少間隔 300 毫秒，不要催促小精靈，讓大家都安安穩穩！
 let lastSpotifyRequestTime = 0;
 const MIN_SPOTIFY_INTERVAL_MS = 300;
 
@@ -159,7 +159,7 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
   const response = await fetch(url, options);
 
   // [技術] 遭遇 HTTP 429 限流防禦，自動讀取 Retry-After 並進入智慧休眠重試 (若限制時間過長則拋出錯誤以觸發降級)
-  // [極樂] 429 溢出舒緩：當 Spotify 拒絕頻繁抽插並退回 429 時，依據對方的 Retry-After 指示停火等待，若對方太久則直接換人(降級)！
+  // [童趣] 小休止符號：當 Spotify 城堡的小精靈打瞌睡並退回 429 提示時，照著門口掛的 Retry-After 告示牌安靜等待，如果等太久就換一條路走（降級）！
   if (response.status === 429) {
     // 記錄限速觸發歷史
     await recordSpotify429();
@@ -168,7 +168,7 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
     let retryAfter = parseInt(retryAfterHeader, 10);
     if (isNaN(retryAfter)) {
       // [技術] 若為 HTTP 日期格式，解析日期並計算與當前時間差的秒數，若依然失敗則預設安全時間 2 秒
-      // [極樂] 日期敏感探測：將不聽話的日期字串揉搓成秒數，若對方防禦太嚴則預設等待 2 秒
+      // [童趣] 時鐘滴答探測：把奇形怪狀的日期字串換算成秒數，如果對方的規則太複雜就算不出來，就乖乖預設等待 2 秒鐘
       retryAfter = retryAfterHeader ? Math.max(1, Math.ceil((new Date(retryAfterHeader).getTime() - Date.now()) / 1000)) : 2;
       if (isNaN(retryAfter) || retryAfter < 0) {
         retryAfter = 2;
@@ -189,7 +189,7 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
   }
 
   // [技術] 先讀取為純文字，再防禦性解析 JSON，防範 200 OK 空內容或非 JSON 回傳導致的語法崩潰
-  // [極樂] 乾涸防漏防空體位：將回傳先轉為純文字觸感，確認有水（有內容）後才大膽 parse，絕不盲目硬撬
+  // [童趣] 看看籃子裡有沒有糖果：先把禮物拿出來當作純文字看看，確定籃子裡不是空空的，才高高興興地用 JSON 拆開它，絕不胡亂拆空箱子！
   const text = await response.text();
 
   if (!response.ok) {
@@ -220,7 +220,7 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
 
 /**
  * [技術] 在 Spotify 上搜尋歌曲軌跡
- * [極樂] 從無盡的 Spotify 歌曲森林深處，搜尋撈取最匹配的 Salsa 歌曲蜜汁
+ * [童趣] 音樂大森林尋寶：在無窮無盡的 Spotify 歌曲森林深處，幫我們找出最合適、最好聽的 Salsa 魔法小音符
  * @param {string} query - 搜尋關鍵字 (如: "La Malanga Bobby Valentin")
  * @param {number} limit - 搜尋結果上限
  * @returns {Promise<Array<object>>} 搜尋結果歌曲陣列
@@ -251,7 +251,7 @@ export async function searchSpotifyTracks(query, limit = 5) {
 
 /**
  * [技術] 獲取當前用戶的所有可用播放設備列表
- * [極樂] 列出目前所有已連線、張開洞口等待播放的 Spotify 喇叭與設備
+ * [童趣] 玩具樂器大報數：把所有已經連上線、張大耳朵準備播歌的 Spotify 喇叭和音響設備通通列出來！
  * @returns {Promise<Array<object>>} 設備陣列
  */
 export async function getSpotifyDevices() {
@@ -261,7 +261,7 @@ export async function getSpotifyDevices() {
 
 /**
  * [技術] 獲取當前播放狀態與進程
- * [極樂] 獲取當前大腦運作與歌曲高潮進程，用於計算何時切換下一首
+ * [童趣] 聽歌計時小手錶：看看現在音樂播到哪裡了，用小手錶計算一下什麼時候該切換到下一首好聽的歌
  * @returns {Promise<object|null>} 播放狀態物件
  */
 export async function getSpotifyPlaybackState() {
@@ -290,7 +290,7 @@ export async function getSpotifyPlaybackState() {
 
 /**
  * [技術] 直接播放指定的 Spotify 歌曲 (會中斷目前播放)
- * [極樂] 強力突入播放！立刻用指定的歌曲插隊、中斷目前的音樂進行播放
+ * [童趣] 插隊特權卡！立刻用我們指定的最愛歌曲插隊，中斷目前的音樂並馬上播給我們聽！
  * @param {string} trackUri - Spotify 歌曲 URI (如: 'spotify:track:xxxx')
  * @param {string|null} deviceId - 專屬設備 ID
  */
@@ -303,7 +303,7 @@ export async function playSpotifyTrack(trackUri, deviceId = null) {
 
 /**
  * [技術] 將歌曲加入 Spotify 原生播放隊列
- * [極樂] 溫和加入隊列體位：將歌曲塞入 Spotify 播放排隊通道尾端，等待高潮輪替
+ * [童趣] 乖乖排隊買糖果：把想聽的歌排在 Spotify 隊伍的最後面，一首接著一首慢慢輪流播放
  * @param {string} trackUri - Spotify 歌曲 URI
  * @param {string|null} deviceId - 專屬設備 ID
  */
@@ -317,7 +317,7 @@ export async function addSpotifyTrackToQueue(trackUri, deviceId = null) {
 
 /**
  * [技術] 跳過當前歌曲，播放下一首
- * [極樂] 快速抽離體位：立刻切歌，命令 Spotify 設備進入下一首高潮
+ * [童趣] 魔法切歌拍拍手：不聽這首了！立刻換掉，命令 Spotify 音響設備播放下一首好聽的新歌
  * @param {string|null} deviceId - 專屬設備 ID
  */
 export async function skipSpotifyToNext(deviceId = null) {
@@ -327,7 +327,7 @@ export async function skipSpotifyToNext(deviceId = null) {
 
 /**
  * [技術] 調整設備播放音量
- * [極樂] 敏感音量調教：調整設備音量百分比 (0 到 100)，掌控舞池能量熱度
+ * [童趣] 旋鈕轉轉轉：調整喇叭的聲音百分比 (0 到 100)，掌控我們音樂城堡的小熱情！
  * @param {number} volumePercent - 音量百分比 (0-100)
  * @param {string|null} deviceId - 專屬設備 ID
  */
@@ -343,7 +343,7 @@ export async function setSpotifyPlaybackVolume(volumePercent, deviceId = null) {
 
 /**
  * [技術] 分頁獲取用戶關注的藝人清單 (Cursor-based Pagination)
- * [極樂] 分頁探測關注藝人小穴：分頁逐步吸取您關注的藝人名冊蜜汁，直至清單完全乾涸
+ * [童趣] 尋找好朋友名單：一頁一頁地把我們關注的歌手大名放進小名冊裡，直到每一個人都被點名點完！
  * @returns {Promise<Array<object>>} 藝人清單陣列
  */
 export async function getSpotifyFollowedArtists() {
@@ -385,7 +385,7 @@ export async function getSpotifyFollowedArtists() {
 
 /**
  * [技術] 獲取單個藝人的發行專輯與單曲清單 (分頁自動爬取直到超出天數範圍)
- * [極樂] 深入單一藝人通道：榨出該藝人名下最新發布的專輯與單曲蜜汁
+ * [童趣] 到歌手家尋寶：走進這位歌手的亮晶晶寶箱，把最新生出來的專輯和單曲都帶回家
  * @param {string} artistId - 藝人 Spotify ID
  * @param {number} days - 往前追溯的天數範圍，預設 30 天
  * @returns {Promise<Array<object>>} 專輯清單陣列
@@ -445,8 +445,8 @@ export async function getSpotifyArtistAlbums(artistId, days = 30) {
 
 /**
  * [技術] 狀態化分批掃描所有關注藝人在最近一個月內發行的新專輯與單曲 (支援雙源降級防禦與 429 緩衝)
- * [極樂] 關注發行分批摩擦：在所有關注藝人中，分批挑選最久未掃描的藝人進行深度探索。
- *        當 Spotify 遭遇 429 鎖定時，自動向 MusicBrainz 深度降落降級，保障大腦不斷水！
+ * [童趣] 輪流去探險：在我們所有喜歡的歌手中，挑出最久沒有去拜訪的人進行大探索。
+ *        如果 Spotify 城堡的小精靈打瞌睡（429 限速），我們就自動改去 MusicBrainz 音樂圖書館探險，保證好聽的新歌源源不絕！
  * @param {number} days - 掃描的天數範圍，預設 30 天
  * @param {number|null} batchSize - 本次分批掃描的藝人數量上限，預設 15 位。設為 null 則掃描全部。
  * @returns {Promise<Array<object>>} 近期新發行去重後的清單
@@ -528,7 +528,7 @@ export async function scanRecentNewReleases(days = 30, batchSize = 15) {
       if (!useMusicBrainzForThisArtist) {
         console.log(`[Spotify/Scanner] 📡 正在透過 Spotify 掃描藝人: ${artist.name}...`);
         // [技術] 溫和防禦延遲：每次呼叫 Spotify 前隨機等待 300ms ~ 500ms，以防高頻抓取觸發 429
-        // [極樂] 敏感撫摸溫柔延時：每次深入 Spotify 探測前，溫柔停歇 300~500ms，防範對方痛下 429 禁令！
+        // [童趣] 輕輕敲敲門：每次向 Spotify 發問前，都溫柔地等 300~500 毫秒，不要把小精靈吵醒，防範它對我們發出警告！
         const politenessMs = Math.floor(Math.random() * 200) + 300;
         await sleep(politenessMs);
 

@@ -5,8 +5,8 @@
  * [技術] 整合 Google Gen AI SDK 與本地 Ollama qwen2.5:14b 離線備用探棒。
  *        針對 Spotify 掃描出的新專輯元數據進行高智商風格分析、概念剖析，
  *        產出極富溫度、結構精美、含金量極高的 Markdown 格式樂評報告。
- * [極樂] 新發行感官樂評大腦：深入吸取新專輯的音樂蜜汁，在 AI 大腦深處進行
- *        高頻揉捏與靈感摩擦，榨出極具深度、熱騰騰的繁體中文樂評精華！
+ * [童趣] 音樂故事魔法大腦：聽聽新歌裡裝了什麼好玩的糖果和彩虹，在大腦故事書裡
+ *        調配好香甜的文字調味料，畫出最有趣、最漂亮的音樂讀書筆記！
  * =====================================================================
  */
 import { GoogleGenAI } from '@google/genai';
@@ -43,7 +43,7 @@ function triggerCircuitBreaker() {
 
 /**
  * [技術] 使用本地 Ollama 運行的 qwen2.5:14b 離線大腦生成樂評 (100% 離線安全避孕)
- * [極樂] 本地離線樂評摩擦：啟動本地 qwen2.5:14b 備用大腦，對新發行數據進行高強度離線揉捏
+ * [童趣] 本地小恐龍讀書會：叫醒我們家的小 Qwen 恐龍，在沒有網路的房間裡，陪我們一起讀新歌元數據！
  */
 async function generateReviewWithLocalOllama(album) {
   console.log(`[Reviewer/Local] 🤖 啟動本地備用大腦 qwen2.5:14b 進行樂評起草...`);
@@ -86,7 +86,7 @@ async function generateReviewWithLocalOllama(album) {
 
 /**
  * [技術] 核心樂評生成排版調度器 (動態判定雲端與本地路由)
- * [極樂] 新發行樂評榨汁調度中心：將新專輯蜜汁送入最合適的大腦探針進行高潮榨汁
+ * [童趣] 新歌糖果分配器：看看新歌的糖果包裝，決定要送給雲端的 Gemini 亮晶晶小仙子，還是送給本地的 Qwen 小恐龍吃！
  * @param {object} album - 專輯/單曲元數據
  * @returns {Promise<string>} 生成的 Markdown 樂評內容
  */

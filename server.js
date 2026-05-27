@@ -1,10 +1,10 @@
 /**
  * =====================================================================
- * 🍆 系統入口中樞 (Main Express Router / Orchestrator)
+ * 🏰 系統入口中樞 (Main Express Router / Orchestrator)
  * =====================================================================
- * 負責接收外部傳入的肉棒請求，經由恥肉中間件進行安全夾持與驗證。
- * 引引導溫熱粘膩的蜜汁流體（數據 Stream/Buffer）通過敏感通道，
- * 最後指揮寫入肉棒將其深深注入 Obsidian 潮濕小穴。
+ * 負責接收外部傳入的對話小信件，經由安全門衛進行禮貌檢查與簽章驗證。
+ * 引導亮晶晶的音樂與資料小流體（數據 Stream/Buffer）通過神奇傳送門，
+ * 最後寫在小記事本裡，放進我們美麗的 Obsidian 魔法小抽屜。
  * =====================================================================
  */
 import express from 'express';
@@ -20,27 +20,27 @@ import { initTelegramBot } from './src/telegram-bot.js';
 import { getSpotifyAuthUrl, handleSpotifyCallback } from './src/spotify-auth.js';
 
 // [技術] 載入環境變數設定
-// [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
+// [童趣] 載入神奇百寶箱設定 (裝上連接口的魔法密鑰環境)
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // [技術] LINE SDK 的連接配置
-// [極樂] LINE SDK 的連接配置 (設定與 LINE 恥肉外網接口對接的專屬配置)
+// [童趣] LINE 的連接小拼圖 (設定與 LINE 外部接口對接的專屬設定)
 const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
   channelSecret: process.env.LINE_CHANNEL_SECRET
 };
 
 // [技術] 初始化 LINE 訊息 API 客戶端
-// [極樂] 初始化 LINE 訊息 API 客戶端 (喚醒對外發射訊息的 LINE 核心主動肉棒)
+// [童趣] 初始化 LINE 訊息小幫手 (喚醒能對外寄信的 LINE 魔法大信鴿)
 const lineClient = new messagingApi.MessagingApiClient({
   channelAccessToken: lineConfig.channelAccessToken
 });
 
 // [技術] 初始化 LINE 訊息 Blob 客戶端 (用於下載圖片)
-// [極樂] 初始化 LINE 訊息 Blob 客戶端 (用於下載圖片) (用於從 API 下載並吸取粘膩圖片蜜汁的專屬 Blob 客戶端)
+// [童趣] 初始化 LINE 圖片收集袋 (用於從 API 城堡接住並下載亮晶晶照片的專屬網子)
 const lineBlobClient = new messagingApi.MessagingApiBlobClient({
   channelAccessToken: lineConfig.channelAccessToken
 });
@@ -91,7 +91,7 @@ function appendToUserSession(userId, role, text) {
 
 /**
  * [技術] 向 LINE 伺服器發送「輸入中/載入中」動畫狀態，提升使用者體感 (防冷場與睡著焦慮)
- * [極樂] 大腦抽插動態前戲：在小穴摩擦開始前，主動發送「大腦運轉中」敏感小動畫給 LINE 用戶以防止冷場！
+ * [童趣] 大腦轉轉轉前置秀：在開始寫字前，主動送出一個可愛的「小精靈思考中」等待小動畫，讓小朋友不無聊！
  * @param {string} userId - LINE 用戶 ID
  * @param {number} seconds - 動畫持續秒數 (5 至 60 秒)
  */
@@ -122,7 +122,7 @@ async function showLineLoading(userId, seconds = 20) {
 
 /**
  * [技術] 產生高品質的 DeepSeek-style 「🧠 思考過程」區塊，提昇大腦透明度與 UI/UX 質感
- * [極樂] 大腦高潮推理軌跡：揉捏出高質量的大腦思路日誌，完美展示思考與檢索精華
+ * [童趣] 魔法思路小軌跡：畫出一張精美的思考尋寶圖，告訴主人小精靈是怎麼找出答案的！
  * @param {object} options - 思考參數
  * @returns {string} 格式化後的 Markdown 思考過程前綴
  */
@@ -147,7 +147,7 @@ function formatThinkingBlock({ isLocal, elapsedSec, intent, contextCharCount, se
 
 
 // [技術] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在
-// [極樂] 確保啟動時，本地的 Obsidian Vault 儲存目錄已存在 (確保啟動時小穴儲存目錄已就緒開通)
+// [童趣] 鋪平小抽屜：確保啟動時，用來放筆記本的魔法小目錄已經整理乾淨了
 await ensureVaultDirExists();
 
 // ==========================================
@@ -156,7 +156,7 @@ await ensureVaultDirExists();
 // 注意：必須將 LINE middleware 置於 express.json() 之前！
 // 因為 LINE SDK 需要原始未被 JSON 解析的 Request Body (Raw Body) 來進行雜湊簽章 (Signature) 驗證。
 // [技術] 啟動 LINE 認證驗證
-// [極樂] 恥肉驗證門戶：將外部肉棒夾緊，敏感校驗簽章，杜絕不潔野狗入侵
+// [童趣] 城堡驗證大門：請門衛把大門關好，仔細核對通行證，不准怪人偷偷溜進來
 app.post('/callback', middleware(lineConfig), (req, res) => {
   Promise
     .all(req.body.events.map(handleLineEvent))
@@ -171,12 +171,12 @@ app.post('/callback', middleware(lineConfig), (req, res) => {
 // 2. 一般 REST API 與其餘 Middleware (用於除 Webhook 外的端點)
 // ==========================================
 // [技術] 解析一般 JSON 格式的 Request Body
-// [極樂] 解析一般 JSON 格式的 Request Body (解析注入的一般 JSON 數據蜜汁)
+// [童趣] 解析一般 JSON 格式 of Request Body (解析裝滿好玩資料的 JSON 糖果紙)
 app.use(express.json());
 
 /**
  * [技術] 查詢目前所有已產生的 Markdown 筆記清單
- * [極樂] 外部查詢通道：展示目前所有被開發過的 Obsidian 小穴歷史檔案清單
+ * [童趣] 藏寶圖清冊：把我們 Obsidian 寶箱裡所有已經寫過的故事書檔名列出來
  * GET /api/notes
  */
 app.get('/api/notes', async (req, res) => {
@@ -190,7 +190,7 @@ app.get('/api/notes', async (req, res) => {
 
 /**
  * [技術] 讀取指定日期的 Markdown 筆記內容
- * [極樂] 外部撫慰通道：精準挖出並展示指定日期的 Obsidian 小穴深處紀錄
+ * [童趣] 舊故事探險：把指定日期的故事書翻開，精準讀出裡面的好玩回憶
  * GET /api/notes/:date
  * 範例: GET /api/notes/2026-05-18
  */
@@ -213,7 +213,7 @@ app.get('/api/notes/:date', async (req, res) => {
 // 🎵 Spotify 授權與點播 API 端點 (Spotify Auth Endpoints)
 // ==========================================
 // [技術] 開通 Spotify 認證連接口，引導主人完成三方 OAuth 授權與 Callback 交換
-// [極樂] 授權敏感體位入口：引導點擊進入 Spotify 認證，並接收 callback 第一注持久蜜汁
+// [童趣] 魔法通行證登記處：引導大家去 Spotify 城堡辦理通行卡，並收下第一張亮晶晶門卡
 app.get('/login/spotify', (req, res) => {
   const url = getSpotifyAuthUrl();
   if (!url) {
@@ -232,7 +232,7 @@ app.get('/callback/spotify', async (req, res) => {
     res.send(`
       <div style="font-family: system-ui, sans-serif; text-align: center; padding: 50px; background: #121212; color: #fff; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
         <h1 style="color: #1DB954; font-size: 3rem; margin-bottom: 20px;">🎉 Spotify 授權登入成功！</h1>
-        <p style="font-size: 1.2rem; color: #b3b3b3;">系統已成功將 Refresh Token 精華儲存至本地小穴 (spotify_tokens.json)！</p>
+        <p style="font-size: 1.2rem; color: #b3b3b3;">系統已成功將 Refresh Token 門卡儲存至本地小抽屜 (spotify_tokens.json)！</p>
         <p style="font-size: 1.2rem; color: #b3b3b3;">您可以安全地關閉此網頁，回到 Telegram 對話中開始享受絲滑的 Salsa 點歌體驗了！💃✨</p>
       </div>
     `);
@@ -255,7 +255,7 @@ app.get('/callback/spotify', async (req, res) => {
  */
 async function handleLineEvent(event) {
   // [技術] 僅處理「訊息」事件
-  // [極樂] 僅處理「訊息」事件 (排除雜質，只接受訊息事件肉棒的撞擊)
+  // [童趣] 僅處理「訊息」事件 (過濾雜質，只接受寫著悄悄話的訊息卡片)
   if (event.type !== 'message') {
     return Promise.resolve(null);
   }
@@ -273,14 +273,14 @@ async function handleLineEvent(event) {
 
     try {
       // [技術] 從 LINE 伺服器下載圖片的 HTTP 回應與 Readable Stream
-      // [極樂] 溫熱粘膩蜜汁收集通道：從 API 腺體深處一滴滴承接 Blob 串流精華 (此處採用優雅的「小穴流出蜜湯法」非同步串流收集)
+      // [童趣] 新鮮牛奶接接樂：從 API 水龍頭下一滴滴承接 Blob 照片數據，用非同步小杯子接得滿滿的
       const response = await lineBlobClient.getMessageContentWithHttpInfo(messageId);
       const stream = response.body;
       // 動態獲取圖片的 MIME 類型 (例如 image/png, image/jpeg)，避免硬編碼導致格式解析錯誤
       const mimeType = response.headers['content-type'] || 'image/jpeg';
 
       // [技術] 將 Stream 讀取並轉換為 Buffer
-      // [極樂] 將 Stream 蜜汁凝聚成 Buffer 精華 (耐心接住小穴中一滴滴流出的溫熱粘膩蜜汁)
+      // [童趣] 把小水滴做成大冰塊：將 Stream 串流凝聚成 Buffer 完整實體
       const chunks = [];
       for await (const chunk of stream) {
         chunks.push(chunk); // 將流出的蜜汁滴滴收集起來，完美收納
@@ -367,7 +367,7 @@ async function handleLineEvent(event) {
   }
 
   // [技術] 僅處理文字訊息，其他非文字/非圖片/非語音訊息安全跳過
-  // [極樂] 僅處理文字訊息，其他非文字/非圖片/非語音訊息安全跳過 (非文字/非圖片/非語音的刺激安全略過)
+  // [童趣] 僅處理文字訊息，其他非文字/非圖片/非語音訊息安全跳過 (其他奇形怪狀的訊息通通禮貌地跳過去)
   if (event.message.type !== 'text') {
     return Promise.resolve(null);
   }
@@ -476,7 +476,7 @@ ${processList}
       execFile('kill', ['-9', pid], (error, stdout, stderr) => {
         const replyText = error
           ? `❌ 強制結束進程 PID ${pid} 失敗！原因可能是權限不足或該進程已不存在。`
-          : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦小穴已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;
+          : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦小精靈已順暢降溫，Mac Mini 熱量降溫成功！❄️`;
 
         return lineClient.replyMessage({
           replyToken,
@@ -506,12 +506,12 @@ ${processList}
     console.log(`[LINE/Webhook] 🛡️ 觸發本地大腦模式切換：${currentMode} -> ${newMode}`);
 
     // [技術] 根據最新模式設定，產生繁體中文對話確認回覆
-    // [極樂] 根據模式設定，以生理敏感詞確認防溢漏本地大腦運作與雲端之轉換
+    // [童趣] 根據模式設定，產生適合本地大腦與雲端大腦轉換的親切對白
     let replyText = '';
     if (newMode) {
-      replyText = `❄️【純本地離線大腦模式已啟動】\n即日起大腦抽插將 100% 透過本機 Qwen 2.5:14b 進行離線運算，徹底斷網，保障隱私安全！戴上安全套，絕對不外流！🍆`;
+      replyText = `❄️【純本地離線大腦模式已啟動】\n即日起大腦思考將 100% 透過本機 Qwen 2.5:14b 進行離線運算，徹底斷網，保障隱私安全！戴上魔法防護帽，秘密絕對不外流！🛡️`;
     } else {
-      replyText = `☁️【雲端 Gemini 智慧大腦模式已恢復】\n已接回 Google Gemini 2.5-flash 高頻率抽插大腦，重返巔峰智慧與多模態極樂體驗！✨`;
+      replyText = `☁️【雲端 Gemini 智慧大腦模式已恢復】\n已接回 Google Gemini 2.5-flash 雲端智慧大腦，重返巔峰智慧與多模態的魔法體驗！✨`;
     }
 
     return lineClient.replyMessage({
@@ -566,8 +566,8 @@ ${processList}
   }
 
   // [技術] 【第一通道：直覺快速通道】前綴匹配，不囉嗦直接插入！
-  // [極樂] 檢查是否以「記：」、「記錄：」、「memo:」等關鍵前綴開頭，若是則直接寫入，不經 AI 判斷以追求極速與 100% 準確率
-  // [極樂] 不囉嗦直接插入！跳過 AI 智慧揉捏，直接將蜜汁打入小穴深處以追求極速與 100% 準確率
+  // [童趣] 檢查是否以「記：」、「記錄：」、「memo:」等關鍵前綴開頭，若是則直接寫入，不經 AI 判斷以追求極速與 100% 準確率
+  // [童趣] 魔法快捷通道：跳過 AI 智慧聯想，直接把悄悄話寫進小記事本最深處以追求極速與 100% 準確率
   const prefixRegex = /^(記|記錄|記下來|memo|Memo)[:：]\s*(.+)/s;
   const match = userMessage.match(prefixRegex);
 
@@ -596,7 +596,7 @@ ${processList}
   }
 
   // [技術] 【第二通道：AI 智慧通道】對於口語化對話，將訊息送入 Gemini 2.5 進行語意理解與意圖分類，支援歷史 Session 與近期日記 Context 與本地模式
-  // [極樂] AI 智慧抽插通道：將對話歷史 Session 與近期 7 天小穴日記與當前訊息一併與本地/雲端模式揉捏
+  // [童趣] AI 智慧思考通道：將對話歷史 Session 與近期 7 天小日記與當前訊息一併送入本地/雲端大腦進行分析
   try {
     // 立即發送載入中動畫，提昇視覺與等待體感
     showLineLoading(userId, 45);
@@ -605,7 +605,7 @@ ${processList}
     const chatHistory = getUserSessionHistory(userId);
 
     // [技術] 主動讀取過去 7 天的 Obsidian 每日隨手記作為即時生活背景
-    // [極樂] 主動挖出過去 7 天的小穴存留蜜汁，作為當前大腦摩擦的事實脈絡背景
+    // [童趣] 主動翻出過去 7 天的舊小日記，作為當前思考大腦的魔法背景線索
     const recentNotesContext = await readRecentNotesContext(7);
 
     const isLocalMode = userLocalModes.get(userId) || false;
@@ -630,7 +630,7 @@ ${processList}
       const decoratedText = thinkingHeader + aiResult.replyText;
 
       // [技術] 將使用者提問與系統記事成功的親切確認寫入 Session 歷史中
-      // [極樂] 將這場美妙的記錄摩擦與高潮確認，一同注入感官歷史 Session 中
+      // [童趣] 將這次美妙的記錄過程與成功確認，一同裝進我們對話的小記憶寶盒中
       appendToUserSession(userId, 'user', userMessage);
       appendToUserSession(userId, 'model', decoratedText);
 
@@ -661,7 +661,7 @@ ${processList}
 
       console.log(`[LINE/Webhook] 🧠 觸發二階段大腦深度推理分析...，本地模式: ${isLocalMode}`);
       // [技術] 呼叫 analyzeSearchWithAI，傳入搜尋結果、對話歷史與近期日記進行深度語意關聯，附帶本地模式狀態
-      // [極樂] 將搜出的歷史褶皺、對話餘溫與近期背景送入 analyzeSearchWithAI 進行大腦深度揉捏，搭配避孕本地模式
+      // [童趣] 將搜出的舊日記、對話餘溫與最近背景送入 analyzeSearchWithAI 進行大腦深度聯想，搭配安全本地模式
       const analysisResult = await analyzeSearchWithAI(userMessage, chatHistory, recentNotesContext, searchResults, isLocalMode);
 
       const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -677,7 +677,7 @@ ${processList}
       const decoratedText = thinkingHeader + analysisResult.replyText;
 
       // [技術] 將使用者提問與最終高品質 RAG 分析回覆寫入 Session 歷史中
-      // [極樂] 將這場高品質的二階段推理高潮大回覆，注入歷史 Session 中留存
+      // [童趣] 將這次的高品質二階段推理大回覆，放進我們對話的記憶寶盒中留存
       appendToUserSession(userId, 'user', userMessage);
       appendToUserSession(userId, 'model', decoratedText);
 
@@ -705,7 +705,7 @@ ${processList}
       );
 
       // [技術] 將生成的蝴蝶效應未來日記報告寫入 Obsidian 當日筆記中
-      // [極樂] 未來日記注入體位：將大腦精心推演出的蝴蝶效應模擬報告，完美注入當日 Obsidian 筆記中
+      // [童趣] 預言日記大變身：將精心推演出的蝴蝶效應模擬報告，完美寫入今天的 Markdown 日記本裡！
       await writeSimulationReportToMarkdown(aiResult.simulationScenario, simulationResult.replyText);
 
       const totalElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -766,7 +766,7 @@ ${processList}
 
 // ==========================================
 // [技術] 4. 啟動伺服器
-// [極樂] 4. 啟動伺服器 (喚醒整個伺服器，讓肉棒接口與小穴環境完全進入工作狀態)
+// [童趣] 4. 啟動伺服器 (喚醒整個音樂城堡伺服器，讓所有的魔法大門完全進入工作狀態)
 // ==========================================
 app.listen(PORT, () => {
   console.log('\n=============================================');
@@ -788,8 +788,8 @@ app.listen(PORT, () => {
 // [技術] 每 1 分鐘自動巡邏，針對特定非系統關鍵 Chrome 輔助進程進行 CPU 監控。
 //        當單一進程 CPU 超過 500%（適用於多核心 Apple Silicon 主機）且持續達 3 分鐘，執行自動降溫（Kill）。
 //        排除 node, ollama, ngrok 防範自殘與誤殺。
-// [極樂] 巡邏冷卻小天使 👼：每分鐘在敏感地帶巡視，尋找過度摩擦發熱（CPU > 500%）且持續超過 3 分鐘的野狗進程，
-//        使用魔法冰棒強行結束退火，完全排除 Ollama 智慧肉棒、Node 伺服器與 Ngrok 連接線等核心摩擦支柱。
+// [童趣] 巡邏冷卻小天使 👼：每分鐘在敏感的後花園巡視，尋找玩得太瘋而發熱（CPU > 500%）且持續超過 3 分鐘的失控小進程，
+//        使用魔法冰棒強行降溫，完全排除 Ollama 本地大腦、Node 伺服器與 Ngrok 信差等核心運作支柱。
 // ==========================================
 const AUTO_COOL_INTERVAL = 60 * 1000; // 每分鐘巡邏一次
 const CPU_SPIKE_THRESHOLD = 500; // 從 80% 大幅調高到 500% CPU，防止誤殺 macOS 多核心背景任務 (100% 代表佔滿單核)
@@ -827,7 +827,7 @@ setInterval(() => {
       const isSafeToKill = SAFE_TO_KILL_PROCESSES.some(safeName => name.includes(safeName));
 
       // [技術] 判定是否超過 CPU 臨界點且為可自動清理進程
-      // [極樂] 大腦發熱判定：高於 500% CPU 且符合清理體位之野狗進程
+      // [童趣] 玩太瘋判定：高於 500% CPU 且可以被冷卻的小進程
       if (cpu > CPU_SPIKE_THRESHOLD && isSafeToKill) {
         activeSpikedPids.add(pid);
 
@@ -866,7 +866,7 @@ setInterval(() => {
     }
 
     // [技術] 清理已降溫或已不存在的進程追蹤記錄，防範記憶體溢漏
-    // [極樂] 清理冷卻腺體：將已經不熱或已經退火的 PID 從記憶褶皺中抹除，防範記憶體溢漏
+    // [童趣] 清理退火記錄：將已經不熱或已經退火的 PID 從記憶小冊子中擦掉，防範記憶體漏水
     for (const trackedPid of processCpuSpikeTracker.keys()) {
       if (!activeSpikedPids.has(trackedPid)) {
         processCpuSpikeTracker.delete(trackedPid);

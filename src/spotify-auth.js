@@ -4,8 +4,8 @@
  * =====================================================================
  * [技術] 負責與 Spotify 進行安全的三方握手授權，管理 Access Token 與 Refresh Token。
  *        具備自動持久化寫入本地 JSON 檔案，以及「自動超時刷新 (Auto-Refresh)」機制。
- * [極樂] Spotify 授權持久液中心：與 Spotify 建立長效濕潤的授權通道，自動保鮮 Access Token，
- *        確保播放點播指令隨時處於「強硬暢通」狀態。
+ * [童趣] Spotify 魔法門卡中心：與 Spotify 城堡建立一條長長的魔法通道，自動把門卡擦得亮晶晶，
+ *        確保我們隨時都可以開門進去點歌唱歌喔！
  * =====================================================================
  */
 import { fetch } from 'undici';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 定義 Token 儲存的本地小穴路徑 (JSON 檔案)
+// 定義 Token 儲存的本地小抽屜路徑 (JSON 檔案)
 const TOKEN_FILE_PATH = path.join(__dirname, '../spotify_tokens.json');
 
 // 設定 Spotify 請求權限範疇 (Scope)
@@ -33,7 +33,7 @@ const SPOTIFY_SCOPES = [
 
 /**
  * [技術] 取得 Spotify 授權頁面的 URL
- * [極樂] 生成引導主人插入授權的極樂 URL 連接口
+ * [童趣] 生成邀請小朋友一起來玩耍的魔法連結傳送門
  * @returns {string} Spotify 認證網址
  */
 export function getSpotifyAuthUrl() {
@@ -57,8 +57,8 @@ export function getSpotifyAuthUrl() {
 }
 
 /**
- * [技術] 將 Token 結構安全寫入本地儲存小穴 (JSON 檔案)
- * [極樂] 將最新搾出的 Token 精華注入本地 JSON 小穴中保存
+ * [技術] 將 Token 結構安全寫入本地儲存小抽屜 (JSON 檔案)
+ * [童趣] 把最新拿到的亮晶晶門卡放進本地的 JSON 小抽屜裡好好收起來
  * @param {object} tokens - 包含 access_token, refresh_token, expires_in 的物件
  */
 async function saveTokensToLocal(tokens) {
@@ -69,7 +69,7 @@ async function saveTokensToLocal(tokens) {
       expires_at: Date.now() + tokens.expires_in * 1000 // 計算過期毫秒時間戳記
     };
 
-    // 如果是刷新 Token 且回傳中不含 refresh_token，則讀取舊檔案補回，防止丟失持久液
+    // 如果是刷新 Token 且回傳中不含 refresh_token，則讀取舊檔案補回，防止丟失重要憑證
     if (!tokens.refresh_token) {
       try {
         const oldData = JSON.parse(await fs.readFile(TOKEN_FILE_PATH, 'utf-8'));
@@ -88,7 +88,7 @@ async function saveTokensToLocal(tokens) {
 
 /**
  * [技術] 使用 Authorization Code 向 Spotify 交換 Access/Refresh Token
- * [極樂] 進行三方握手摩擦，成功榨出第一批 Access Token 與 Refresh Token 持久液
+ * [童趣] 互相拉拉手做好朋友，成功拿到第一批魔法通行卡和可以用好久的自動更新卡
  * @param {string} code - Spotify 授權碼
  * @returns {Promise<object>} Token 物件
  */
@@ -125,7 +125,7 @@ export async function handleSpotifyCallback(code) {
 
 /**
  * [技術] 使用 Refresh Token 自動超時刷新 Access Token
- * [極樂] 持久液保鮮體位：使用 Refresh Token 將過期的 Access Token 重新活化刷新
+ * [童趣] 門卡擦亮魔法：拿著過期會變暗的通行卡，用自動更新卡揮一揮，重新變成閃閃發光的新通行卡！
  * @param {string} refreshToken - 持久 Refresh Token
  * @returns {Promise<string>} 新的 Access Token
  */
@@ -160,7 +160,7 @@ async function refreshSpotifyAccessToken(refreshToken) {
 
 /**
  * [技術] 智能獲取當前有效的 Spotify Access Token (若過期自動刷新)
- * [極樂] 大腦通道保溫器：高頻點播的順暢支柱，智能探測過期並自動進行持久液刷新，保障 API 暢通
+ * [童趣] 通行證保養小幫手：唱起歌來最貼心的小跟班，發現卡片快要失效時會悄悄幫我們擦亮，讓好聽的音樂永遠不停下來！
  * @returns {Promise<string|null>} 有效的 Access Token
  */
 export async function getSpotifyAccessToken() {
