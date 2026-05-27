@@ -401,7 +401,33 @@ export async function processImageWithLocalOllama(imageBase64, mimeType, customP
     if (firstBrace !== -1 && lastBrace !== -1) {
       cleanedJsonText = cleanedJsonText.substring(firstBrace, lastBrace + 1);
     }
-    const result = JSON.parse(cleanedJsonText);
+
+    let result;
+    try {
+      result = JSON.parse(cleanedJsonText);
+    } catch (parseError) {
+      console.warn(`[Ollama/LocalVision] ⚠️ 初次 JSON 解析失敗，啟動緊急修復機制 (Exception Captured).`);
+      // [技術] 容錯救援：若 Ollama 吐出非閉合字串、多餘逗號或 Markdown 語意，以正則抓取關鍵欄位
+      // [繁體中文註解] 魔法救援大隊：如果本地小廚師烤披薩烤得缺了一角，我們用魔法剪刀把能吃的部分剪下來！
+      const titleMatch = cleanedJsonText.match(/"title"\s*:\s*"([^"]+)"/);
+      const replyMatch = cleanedJsonText.match(/"replyText"\s*:\s*"([^"]+)"/);
+      
+      let ocrContent = '（本地視覺大腦解析成功，但 JSON 輸出結構不完全，已自動救援還原）';
+      const ocrRegex = /"ocrContent"\s*:\s*"([\s\S]*?)"(?=\s*,\s*"replyText"|\s*,\s*"title"|\s*\})/;
+      const ocrMatch = cleanedJsonText.match(ocrRegex);
+      if (ocrMatch) {
+        ocrContent = ocrMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      } else {
+        // 最終退路：把整個 Ollama content 當作 OCR 筆記內容
+        ocrContent = jsonText;
+      }
+
+      result = {
+        title: titleMatch ? titleMatch[1] : '本地視覺筆記',
+        ocrContent: ocrContent,
+        replyText: replyMatch ? replyMatch[1] : '本地視覺大腦已在極限狀態下為您救回照片分析結果。✨'
+      };
+    }
 
     // 防禦性欄位修復，防範 undefined 溢漏
     if (result.title === undefined) result.title = '本地視覺筆記';
