@@ -188,19 +188,16 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
     throw new Error(`Spotify 伺服器頻率限制 (HTTP 429) 且已耗盡重試次數，請稍後再試。`);
   }
 
-  // [技術] 處理 204 No Content 或 202 Accepted 等空回覆，直接解析 json() 會導致語法崩潰
-  // [極樂] 204 乾涸防漏體位：當 Spotify 順暢高潮後只射出 240 乾癟訊號時，溫柔返回成功，避免解析空蜜汁崩潰
-  if (response.status === 204 || response.status === 202) {
-    return { success: true };
-  }
+  // [技術] 先讀取為純文字，再防禦性解析 JSON，防範 200 OK 空內容或非 JSON 回傳導致的語法崩潰
+  // [極樂] 乾涸防漏防空體位：將回傳先轉為純文字觸感，確認有水（有內容）後才大膽 parse，絕不盲目硬撬
+  const text = await response.text();
 
   if (!response.ok) {
-    const errText = await response.text();
     // 嘗試解析錯誤訊息
-    let errorDetail = errText;
+    let errorDetail = text;
     try {
-      const errJson = JSON.parse(errText);
-      errorDetail = errJson.error?.message || errText;
+      const errJson = JSON.parse(text);
+      errorDetail = errJson.error?.message || text;
     } catch (e) {
       // 忽略解析 JSON 失敗
     }
@@ -213,7 +210,12 @@ async function spotifyRequestDirect(endpoint, method = 'GET', body = null, param
     throw new Error(`Spotify 伺服器拒絕 (HTTP ${response.status}): ${errorDetail}`);
   }
 
-  return await response.json();
+  // 處理 204 No Content, 202 Accepted 或 200 空回覆
+  if (response.status === 204 || response.status === 202 || !text.trim()) {
+    return { success: true };
+  }
+
+  return JSON.parse(text);
 }
 
 /**
