@@ -16,7 +16,7 @@ import os from 'os';
 // 引入 Spotify 關注藝人掃描與 GitBook 同步引擎
 import { scanRecentNewReleases, readSystemState, writeSystemState } from './spotify-client.js';
 import { generateAlbumReview } from './album-reviewer.js';
-import { publishToGitBook } from './gitbook-publisher.js';
+import { publishToGitBook, gitPushChanges } from './gitbook-publisher.js';
 
 // 記憶體中快取各 Telegram 用戶的對話 Session 歷史紀錄，最大限制 15 輪
 const telegramUserSessions = new Map();
@@ -302,7 +302,8 @@ ${processList}
 
             try {
               const reviewMarkdown = await generateAlbumReview(album);
-              const publishResult = await publishToGitBook(album, reviewMarkdown);
+              // 傳入 skipPush = true 啟用批次優化，避免迴圈內重複高頻推送 Git
+              const publishResult = await publishToGitBook(album, reviewMarkdown, true);
               if (publishResult.success) {
                 successCount++;
               }
@@ -310,6 +311,13 @@ ${processList}
               console.error(`[Telegram/Scanner] 處理 ${title} 樂評失敗:`, err);
               await bot.sendMessage(chatId, `⚠️ 樂評《${title}》分析或推送失敗: ${err.message || err}`);
             }
+          }
+
+          // 批次掃描完成後，若有成功產出，執行單次 GitOps 推送，徹底消除高頻推送衝突與限流風險
+          if (successCount > 0) {
+            await bot.sendMessage(chatId, `🚀 正在將本批次 ${successCount} 首新發行樂評批次推送至 GitHub 並同步 GitBook... 📡`);
+            const commitMsg = `docs(music): batch add ${successCount} new AI reviews`;
+            await gitPushChanges(commitMsg);
           }
 
           const report = `🎉【Spotify 分批掃描完成】\n\n📊 本批次掃描藝人數: 15 位\n📦 尋獲新發行數: ${newReleases.length} 個\n✅ 成功同步樂評數: ${successCount} 個\n\n💡 剩餘未掃描或較早掃描藝人已在狀態庫列隊，下次執行時將自動順延推進！🚀`;

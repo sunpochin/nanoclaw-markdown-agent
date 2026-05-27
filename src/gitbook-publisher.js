@@ -151,7 +151,7 @@ export async function gitPushChanges(commitMessage) {
  * @param {object} album - 專輯/單曲元數據
  * @param {string} reviewMarkdown - AI 生成的樂評內容
  */
-export async function publishToGitBook(album, reviewMarkdown) {
+export async function publishToGitBook(album, reviewMarkdown, skipPush = false) {
   await ensureGitBookStructure();
 
   const title = `${album.primary_artist} - ${album.name}`;
@@ -167,9 +167,11 @@ export async function publishToGitBook(album, reviewMarkdown) {
   // 更新 SUMMARY.md 大綱索引
   await updateSummary(title, relativeFilePath);
 
-  // 自動執行 GitOps 同步推送
-  const commitMsg = `docs(music): add new AI review for ${title}`;
-  await gitPushChanges(commitMsg);
+  // 自動執行 GitOps 同步推送 (支援批次跳過)
+  if (!skipPush) {
+    const commitMsg = `docs(music): add new AI review for ${title}`;
+    await gitPushChanges(commitMsg);
+  }
 
   console.log(`[GitBook/Publisher] 🌟 樂評《${title}》已成功發布並啟動 GitOps 同步！`);
   return {
