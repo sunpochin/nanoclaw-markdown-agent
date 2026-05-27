@@ -23,10 +23,12 @@ const TOKEN_FILE_PATH = path.join(__dirname, '../spotify_tokens.json');
 // 設定 Spotify 請求權限範疇 (Scope)
 // user-modify-playback-state: 用於切換播放、暫停、點播加歌
 // user-read-playback-state: 用於讀取目前播放歌曲、剩餘時間
+// user-follow-read: 用於獲取您關注的藝人名單 (新發行掃描必須)
 const SPOTIFY_SCOPES = [
   'user-modify-playback-state',
   'user-read-playback-state',
-  'user-read-currently-playing'
+  'user-read-currently-playing',
+  'user-follow-read'
 ].join(' ');
 
 /**

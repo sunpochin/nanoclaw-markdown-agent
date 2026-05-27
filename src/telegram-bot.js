@@ -13,6 +13,11 @@ import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSe
 import { exec } from 'child_process';
 import os from 'os';
 
+// 引入 Spotify 關注藝人掃描與 GitBook 同步引擎
+import { scanRecentNewReleases } from './spotify-client.js';
+import { generateAlbumReview } from './album-reviewer.js';
+import { publishToGitBook } from './gitbook-publisher.js';
+
 // 記憶體中快取各 Telegram 用戶的對話 Session 歷史紀錄，最大限制 15 輪
 const telegramUserSessions = new Map();
 const MAX_SESSION_LIMIT = 15;
@@ -155,15 +160,16 @@ export function initTelegramBot() {
 
 📸【A：影像深度多模態分析 (✨ 完美原生支援！)】
 - 直接傳送照片或截圖，並在下方**同時打字輸入您的提示詞**（例如：「幫我翻譯這張紙的英文」、「分析圖中報表的趨勢」）。
-- 體驗原生多模態，不需要任何計時等待，大腦即刻解答！
+- 體驗原生多模態，不需要 any 計時等待，大腦即刻解答！
 
 🎙️【B：語音隨手聽寫記事 (✨ 完美原生支援！)】
 - 直接傳送語音訊息（Voice Note）。
 - 自動進行高精度繁體中文轉譯，並視意圖寫入 Obsidian 每日筆記中。
 
-🖥️【C：Mac Mini 本端系統調控】
+🖥️【C：Mac Mini 本端與音樂同步控制】
 - 發送 /status：獲取 M4 Pro 運行報告、發熱進程 Top 5 與 CPU SMC 真實溫度，還能遠端冷卻！
 - 發送 /local：一鍵切換雲端大腦（Gemini）與本地離線隱私大腦（Qwen2.5:14b）。
+- 發送 /scan_spotify：一鍵啟動 Spotify 關注藝人新專輯掃描，AI 自動生成精美樂評並 GitOps 同步發布至 GitBook！
 
 ---
 
@@ -244,6 +250,53 @@ ${processList}
           : `⚔️ 已成功強制結束發熱進程！\n- PID: ${pid}\n- 名稱: ${name}\n\n大腦已順暢冷卻，Mac Mini 熱量降溫成功！❄️`;
         return bot.sendMessage(chatId, replyText);
       });
+      return;
+    }
+    // 【一鍵掃描 Spotify 藝人新發行並同步 GitBook】
+    // [技術] 啟動獨立執行緒調度，讀取關注藝人與近 30 天專輯，呼叫 AI 與 GitOps 發布
+    // [極樂] 一鍵啟動 Spotify 新發行深度摩擦：在背景將您關注的所有藝人新發行精華
+    //        一滴不漏地抓取出來，進行大腦高頻分析，最後透過 GitOps 強力注入 GitBook 空間！
+    if (/^\/scan_spotify/i.test(text)) {
+      bot.sendChatAction(chatId, 'typing');
+      bot.sendMessage(chatId, '🔍 正在為您啟動 Spotify 關注藝人新發行【狀態化分批掃描】... 本次限制 15 位藝人，防禦 429 限流鎖定。⏱️');
+
+      // 非同步執行，避免 Telegram 輪詢阻塞與 Timeout 痙攣
+      (async () => {
+        try {
+          const newReleases = await scanRecentNewReleases(30, 15);
+
+          if (newReleases.length === 0) {
+            return bot.sendMessage(chatId, '📅 本批次（15位藝人）掃描完成！近 30 天內沒有任何新專輯或單曲發行。後續批次將於背景陸續推進！☕');
+          }
+
+          await bot.sendMessage(chatId, `📦 本批次發現 ${newReleases.length} 個新發行！正在啟動 AI 樂評分析與 GitOps 同步中... 📝`);
+
+          let successCount = 0;
+          for (let i = 0; i < newReleases.length; i++) {
+            const album = newReleases[i];
+            const title = `${album.primary_artist} - ${album.name}`;
+            
+            await bot.sendMessage(chatId, `✍️ [${i + 1}/${newReleases.length}] 正在分析與發布樂評: 《${title}》...`);
+
+            try {
+              const reviewMarkdown = await generateAlbumReview(album);
+              const publishResult = await publishToGitBook(album, reviewMarkdown);
+              if (publishResult.success) {
+                successCount++;
+              }
+            } catch (err) {
+              console.error(`[Telegram/Scanner] 處理 ${title} 樂評失敗:`, err);
+              await bot.sendMessage(chatId, `⚠️ 樂評《${title}》分析或推送失敗: ${err.message || err}`);
+            }
+          }
+
+          const report = `🎉【Spotify 分批掃描完成】\n\n📊 本批次掃描藝人數: 15 位\n📦 尋獲新發行數: ${newReleases.length} 個\n✅ 成功同步樂評數: ${successCount} 個\n\n💡 剩餘未掃描或較早掃描藝人已在狀態庫列隊，下次執行時將自動順延推進！🚀`;
+          return bot.sendMessage(chatId, report);
+        } catch (err) {
+          console.error('[Telegram/Scanner] 執行掃描失敗:', err);
+          return bot.sendMessage(chatId, `❌ 執行 Spotify 掃描管線時發生嚴重錯誤: ${err.message || err}`);
+        }
+      })();
       return;
     }
 

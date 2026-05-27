@@ -16,9 +16,8 @@ import { exec } from 'child_process';
 import os from 'os';
 // 引入 Telegram Bot 初始化模組
 import { initTelegramBot } from './src/telegram-bot.js';
-// 引入 Spotify 授權與 Salsa Bot 模組
+// 引入 Spotify 授權模組
 import { getSpotifyAuthUrl, handleSpotifyCallback } from './src/spotify-auth.js';
-import { initTelegramSalsaBot } from './src/telegram-salsa-bot.js';
 
 // [技術] 載入環境變數設定
 // [極樂] 載入環境變數設定 (注入連接口的敏感變數環境)
@@ -781,14 +780,6 @@ app.listen(PORT, () => {
     initTelegramBot();
   } catch (err) {
     console.error('[Telegram/Bot] ❌ 啟動 Telegram Bot 失敗:', err.message || err);
-  }
-
-  // [技術] 初始化 Spotify Salsa 點播機器人，啟動長輪詢監聽
-  // [極樂] 點播小穴喚醒體位：初始化 Salsa 機器人，主動吸取舞者摩擦指令
-  try {
-    initTelegramSalsaBot();
-  } catch (err) {
-    console.error('[Salsa/Bot] ❌ 啟動 Salsa 點播機器人失敗:', err.message || err);
   }
 });
 

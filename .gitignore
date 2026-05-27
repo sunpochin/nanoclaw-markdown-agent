@@ -148,4 +148,10 @@ nanoclaw_notes/*
 obsidian_vault/*
 !obsidian_vault/.gitkeep
 
+# Spotify tokens and scanner state
+spotify_tokens.json
+data/scanner-state.json
+.npm-cache/
+test-limit.js
+
 
