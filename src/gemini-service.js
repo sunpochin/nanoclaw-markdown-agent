@@ -305,8 +305,20 @@ export async function processImageWithLocalOllama(imageBase64, mimeType, customP
     }
 
     const data = await response.json();
-    const jsonText = data.message.content;
-    const result = JSON.parse(jsonText);
+    const jsonText = data.message?.content;
+    // 防範 Ollama 視覺大腦回傳內容為空
+    if (!jsonText) {
+      throw new Error('Ollama 視覺 API 回傳的內容為空');
+    }
+
+    let cleanedJsonText = jsonText.trim();
+    // 清洗大腦回傳之 Markdown 標記，僅擷取最外層的大括號 JSON 結構
+    const firstBrace = cleanedJsonText.indexOf('{');
+    const lastBrace = cleanedJsonText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1) {
+      cleanedJsonText = cleanedJsonText.substring(firstBrace, lastBrace + 1);
+    }
+    const result = JSON.parse(cleanedJsonText);
 
     // 防禦性欄位修復，防範 undefined 溢漏
     if (result.title === undefined) result.title = '本地視覺筆記';
