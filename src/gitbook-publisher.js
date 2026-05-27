@@ -109,7 +109,7 @@ async function updateSummary(title, relativePath) {
  * [技術] 自動執行本機 Git 指令，將異動內容 add, commit 並 push 至 GitHub
  * [極樂] GitHub 推送摩擦高潮：取得當前分支，自動進行 GitOps 安全推送，一鍵點燃 GitBook 同步大火
  */
-async function gitPushChanges(commitMessage) {
+export async function gitPushChanges(commitMessage) {
   console.log(`[GitBook/GitOps] 📡 正在偵測當前 Git 分支...`);
   try {
     // [技術] 使用 execFile 代替 exec 以安全傳遞參數，防範惡意 commitMessage 命令注入漏洞
