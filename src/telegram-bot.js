@@ -14,7 +14,7 @@ import { execFile } from 'child_process';
 import os from 'os';
 
 // 引入 Spotify 關注藝人掃描與 GitBook 同步引擎
-import { scanRecentNewReleases } from './spotify-client.js';
+import { scanRecentNewReleases, readSystemState, writeSystemState } from './spotify-client.js';
 import { generateAlbumReview } from './album-reviewer.js';
 import { publishToGitBook } from './gitbook-publisher.js';
 
@@ -258,6 +258,28 @@ ${processList}
     //        一滴不漏地抓取出來，進行大腦高頻分析，最後透過 GitOps 強力注入 GitBook 空間！
     if (/^\/scan_spotify/i.test(text)) {
       bot.sendChatAction(chatId, 'typing');
+      
+      // 讀取全域系統狀態進行防刷冷卻驗證
+      const systemState = await readSystemState();
+      const lastScan = systemState.lastScanCommandTime || 0;
+      const cooldownMs = 10 * 60 * 1000; // 10 分鐘冷卻
+      const now = Date.now();
+      const elapsed = now - lastScan;
+
+      if (elapsed < cooldownMs) {
+        const remainingMs = cooldownMs - elapsed;
+        const minutes = Math.floor(remainingMs / (60 * 1000));
+        const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+        return bot.sendMessage(
+          chatId, 
+          `⚠️ **安全頻率冷卻中！**\n\n為防範 Spotify 24 小時封鎖限制，每次掃描間隔需大於 10 分鐘。距離下次解鎖還剩 **${minutes} 分 ${seconds} 秒**。⏱️`
+        );
+      }
+
+      // 更新最後執行時間戳記並持久化
+      systemState.lastScanCommandTime = now;
+      await writeSystemState(systemState);
+
       bot.sendMessage(chatId, '🔍 正在為您啟動 Spotify 關注藝人新發行【狀態化分批掃描】... 本次限制 15 位藝人，防禦 429 限流鎖定。⏱️');
 
       // 非同步執行，避免 Telegram 輪詢阻塞與 Timeout 痙攣

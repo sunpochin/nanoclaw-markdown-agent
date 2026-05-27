@@ -33,21 +33,101 @@ async function enforceSpotifyRateLimit() {
   lastSpotifyRequestTime = Date.now();
 }
 
+// [技術] 載入系統狀態儲存路徑
+const SYSTEM_STATE_FILE = path.resolve('data/system-state.json');
+
+// 讀取全域系統狀態 (防刷時間戳與 429 歷史)
+export async function readSystemState() {
+  try {
+    const data = await fs.readFile(SYSTEM_STATE_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (err) {
+    return {
+      lastScanCommandTime: 0,
+      spotify429ErrorHistory: [],
+      spotifyDisabledUntil: 0
+    };
+  }
+}
+
+// 寫入全域系統狀態
+export async function writeSystemState(state) {
+  try {
+    await fs.mkdir(path.dirname(SYSTEM_STATE_FILE), { recursive: true });
+    await fs.writeFile(SYSTEM_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+  } catch (err) {
+    console.warn(`[SystemState] ⚠️ 無法寫入狀態檔:`, err.message || err);
+  }
+}
+
+// 檢查 Spotify API 是否正處於自動降級冷卻保護期
+export async function isSpotifyCooldownActive() {
+  const state = await readSystemState();
+  if (state.spotifyDisabledUntil && Date.now() < state.spotifyDisabledUntil) {
+    const remainingMs = state.spotifyDisabledUntil - Date.now();
+    const remainingHrs = (remainingMs / (1000 * 60 * 60)).toFixed(1);
+    console.warn(`[Spotify/Cooldown] 🔒 Spotify API 正處於降級冷卻中，剩餘 ${remainingHrs} 小時，自動降級。`);
+    return true;
+  }
+  return false;
+}
+
+// 記錄 429 限流錯誤，並在 24 小時內大於等於 2 次時啟動 24 小時強制冷卻
+export async function recordSpotify429() {
+  const state = await readSystemState();
+  const now = Date.now();
+  
+  // 僅保留過去 24 小時內的時間戳記
+  const oneDayAgo = now - 24 * 60 * 60 * 1000;
+  state.spotify429ErrorHistory = (state.spotify429ErrorHistory || [])
+    .filter(ts => ts > oneDayAgo);
+  
+  state.spotify429ErrorHistory.push(now);
+  
+  if (state.spotify429ErrorHistory.length >= 2) {
+    state.spotifyDisabledUntil = now + 24 * 60 * 60 * 1000;
+    console.error(`[Spotify/Cooldown] 🚨 24 小時內觸發 429 限流達到臨界點 (2 次)！啟動 24 小時降級冷卻，強制完全禁用 Spotify。`);
+  }
+  
+  await writeSystemState(state);
+}
+
+// [技術] 互斥鎖佇列，強制所有請求排隊並串行執行，徹底消除異步併發導致的防禦失效
+let spotifyLock = Promise.resolve();
+
 /**
- * [技術] 核心 API 請求包裝器，自動處理 Token 注入與 204 狀態碼空回覆防崩潰，內建 429 限流自動重試防禦，支援全域瓶頸限流
- * [極樂] 大腦接口摩擦封裝：自動吸取最新 Access Token 保鮮液，流暢應對 Spotify 204 乾癟反應，更能溫柔承受 429 溢出重試
- * @param {string} endpoint - API 子端點 (如 'me/player/play')
- * @param {string} method - HTTP 請求體位 (GET, POST, PUT, DELETE)
- * @param {object|null} body - 請求 Payload 蜜汁
+ * [技術] 核心 API 請求佇列包裝器，負責處理降級冷卻與 Mutex 排隊鎖定
+ * @param {string} endpoint - API 子端點
+ * @param {string} method - HTTP 方法
+ * @param {object|null} body - 請求 Payload
  * @param {object|null} params - 查詢參數物件
- * @param {number} retries - 遭遇 429 時的最大重試次數，預設 3 次
- * @returns {Promise<any>} API 解析結果
+ * @param {number} retries - 遭遇 429 時的最大重試次數
+ * @returns {Promise<any>}
  */
 async function spotifyRequest(endpoint, method = 'GET', body = null, params = null, retries = 3) {
-  // [技術] 執行全域瓶頸限速，防範高頻請求轟炸 Spotify
-  // [極樂] 起摩擦限制：啟動排隊摩擦限制，保障與 Spotify 接口抽插頻率永遠符合安全閾值
-  await enforceSpotifyRateLimit();
+  // 檢查是否處於自動降級冷卻保護中
+  if (await isSpotifyCooldownActive()) {
+    throw new Error('Spotify API 處於自動降級冷卻保護中，已強制切換至 MusicBrainz 管道。');
+  }
 
+  const currentLock = spotifyLock;
+  let release;
+  spotifyLock = new Promise(resolve => { release = resolve; });
+
+  await currentLock;
+  try {
+    // 執行全域瓶頸限速
+    await enforceSpotifyRateLimit();
+    return await spotifyRequestDirect(endpoint, method, body, params, retries);
+  } finally {
+    release();
+  }
+}
+
+/**
+ * [技術] 實際發送 API 請求的直呼器，自動處理 Token 注入與 429 緩衝，內建降級冷卻記錄
+ */
+async function spotifyRequestDirect(endpoint, method = 'GET', body = null, params = null, retries = 3) {
   const token = await getSpotifyAccessToken();
   if (!token) {
     throw new Error('未取得有效的 Spotify 授權！請先登入 http://localhost:3001/login/spotify 進行認證。');
@@ -81,6 +161,9 @@ async function spotifyRequest(endpoint, method = 'GET', body = null, params = nu
   // [技術] 遭遇 HTTP 429 限流防禦，自動讀取 Retry-After 並進入智慧休眠重試 (若限制時間過長則拋出錯誤以觸發降級)
   // [極樂] 429 溢出舒緩：當 Spotify 拒絕頻繁抽插並退回 429 時，依據對方的 Retry-After 指示停火等待，若對方太久則直接換人(降級)！
   if (response.status === 429) {
+    // 記錄限速觸發歷史
+    await recordSpotify429();
+
     const retryAfterHeader = response.headers.get('retry-after');
     let retryAfter = parseInt(retryAfterHeader, 10);
     if (isNaN(retryAfter)) {
@@ -100,7 +183,7 @@ async function spotifyRequest(endpoint, method = 'GET', body = null, params = nu
     console.warn(`[Spotify/Client] 🚨 觸發微量頻率限制 (HTTP 429)，將依照指示等待 ${retryAfter} 秒後進行重試... (剩餘重試次數: ${retries})`);
     if (retries > 0) {
       await sleep(retryAfter * 1000);
-      return spotifyRequest(endpoint, method, body, params, retries - 1);
+      return spotifyRequestDirect(endpoint, method, body, params, retries - 1);
     }
     throw new Error(`Spotify 伺服器頻率限制 (HTTP 429) 且已耗盡重試次數，請稍後再試。`);
   }
