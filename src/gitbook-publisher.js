@@ -126,8 +126,14 @@ async function gitPushChanges(commitMessage) {
     try {
       await execFilePromise('git', ['commit', '-m', commitMessage]);
     } catch (e) {
-      console.log(`[GitBook/GitOps] ⚠️ 沒有檢測到新的變更，跳過 Commit。`);
-      return;
+      const errMessage = e.message || '';
+      // 僅在確定是「無變動」的情況下才安全跳過，其餘錯誤應主動拋出以利除錯
+      if (errMessage.includes('nothing to commit') || errMessage.includes('working tree clean')) {
+        console.log(`[GitBook/GitOps] ⚠️ 沒有檢測到新的變更，跳過 Commit。`);
+        return;
+      }
+      console.error(`[GitBook/GitOps] ❌ Git commit 失敗:`, e.message || e);
+      throw e;
     }
 
     console.log(`[GitBook/GitOps] 🚀 正在推送至 GitHub 遠端倉庫 [origin/${currentBranch}]...`);
