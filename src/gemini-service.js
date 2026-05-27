@@ -114,6 +114,32 @@ const SYSTEM_INSTRUCTION = `
 - 若 isSearch = true，請回覆使用者：「收到！正在為您從本地 Obsidian 筆記深處搜尋關於『{關鍵字}』的紀錄... 🔍」
 - 若 isSimulation = true，請回覆使用者：「收到！正在為您啟動『🦋 蝴蝶效應未來模擬器』，正深入 Obsidian 檢索『{關鍵字}』的歷史軌跡與近期日記背景，為您預測未來日記的沙盒分支... ⏳」
 - 若為一般聊天，請直接以高品質、富含溫度且結合近期日記脈絡的繁體中文，聰明且精準地回覆使用者的詢問、焦慮或閒聊。
+
+【長期事實記憶提取指南（isFact）】
+- 在分析所有訊息時，請額外判斷使用者說的話中是否包含「客觀的長期事實」—— 即那些值得長期記憶、未來可能需要查詢的具體資訊（不是當下情緒或意見）。
+- 以下情況請將 isFact 設為 true 並填入 factData：
+  - 醫療資訊：「媽媽下週要去亞東打 Prolia」、「爸爸的血壓藥改成 XXX」
+  - 重要日期：「租約到 2026-12-31 到期」、「車子下次保養是 8 月」
+  - 人員關係：「看護 Susi 從 5 月 1 號開始照顧媽媽」
+  - 財務記錄：「簽了 XXX 合約，金額 NTD 50,000」
+  - 地點資訊：「媽媽現在住在高雄美樹大悅 3 樓」
+- 以下情況請不要將 isFact 設為 true：
+  - 一般閒聊、心情抒發、意見表達
+  - 臨時瑣事（不需長期追蹤）
+  - 已在 isNote 中記錄但不具長期查詢價值的片段
+
+【factData 欄位填寫規範】
+- entity_id：事實的主角/對象，使用 snake_case 英文格式
+  - 人物：person_mother（媽媽）、person_father（爸爸）、person_self（自己）
+  - 地點：place_XXX（如 place_hospital_asia_east）
+  - 事件：event_XXX（如 event_car_maintenance）
+  - 全局知識：global
+  - 可自由創造新的 entity_id，但必須符合 prefix_description 的 snake_case 格式
+- domain：事實的知識領域（medical, caregiving, finance, location, legal, tech, general 等）
+- claim：用一句清楚完整的繁體中文描述這個事實，修正任何錯字
+- confidence：high（使用者明確陳述）、medium（可合理推斷）、low（間接推測）
+- source：user_report（使用者直接告知）、doc_scan（文件掃描）
+- replaces：若這個事實明顯更新了某個舊事實，填入被取代的 fact_id 陣列；否則填空陣列 []
 `;
 
 // [技術] 定義結構化 JSON 輸出規格 (Schema)
@@ -148,9 +174,51 @@ const RESPONSE_SCHEMA = {
     replyText: {
       type: "string",
       description: "給使用者的繁體中文對話回覆。如果是搜尋，則為提示語；如果是模擬，則為開啟對白；如果是記事，則為友善確認；如果是一般聊天，則為高品質的回答。"
+    },
+    // [技術] 長期事實記憶欄位：判定是否包含值得索引的客觀長期事實
+    // [童趣] 長期記憶雷達：判斷這段話裡有沒有值得放進魔法卡片盒永久保存的事實糖果
+    isFact: {
+      type: "boolean",
+      description: "判定使用者訊息中是否包含值得長期記憶的客觀事實（醫療、財務、人員、地點、重要日期等）。true 時必須填寫 factData。"
+    },
+    factData: {
+      type: "object",
+      nullable: true,
+      description: "事實結構化資料。僅在 isFact = true 時填寫，否則為 null。",
+      properties: {
+        entity_id: {
+          type: "string",
+          description: "事實的主角/對象，snake_case 英文格式。例：person_mother, place_hospital_asia_east, global"
+        },
+        domain: {
+          type: "string",
+          description: "事實的知識領域。例：medical, caregiving, finance, location, legal, tech, general"
+        },
+        claim: {
+          type: "string",
+          description: "用一句完整的繁體中文描述這個客觀事實（已修正錯字）"
+        },
+        confidence: {
+          type: "string",
+          description: "信心度：high（明確陳述）、medium（合理推斷）、low（間接推測）"
+        },
+        source: {
+          type: "string",
+          description: "事實來源：user_report（使用者直接告知）、doc_scan（文件掃描）"
+        },
+        replaces: {
+          type: "array",
+          description: "若此事實取代了某些舊事實，填入被取代的 fact_id 陣列；否則填空陣列",
+          items: { type: "string" }
+        }
+      }
+    },
+    searchEntityId: {
+      type: "string",
+      description: "搜尋時指定的 entity_id 篩選條件（如 person_mother）。若無特定對象則為空字串。"
     }
   },
-  required: ["isNote", "noteContent", "isSearch", "searchQuery", "isSimulation", "simulationScenario", "replyText"]
+  required: ["isNote", "noteContent", "isSearch", "searchQuery", "isSimulation", "simulationScenario", "replyText", "isFact"]
 };
 
 /**
@@ -177,7 +245,17 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
   "searchQuery": "要查詢或對照的精確關鍵字。如果不是搜尋且非模擬，則填空字串 \"\"",
   "isSimulation": true/false (是否為假設性決策的未來預估/蝴蝶效應模擬),
   "simulationScenario": "提取的假設情境。如果非模擬，則填空字串 \"\"",
-  "replyText": "給使用者的親切繁體中文回覆內容（如果是搜尋/模擬，回覆提示語；如果是記事，回覆記事成功確認；如果是一般閒聊，則是結合生活背景日記的高品質回覆）"
+  "replyText": "給使用者的親切繁體中文回覆內容",
+  "isFact": true/false (是否包含值得長期記憶的客觀事實，如醫療/財務/人員/地點/重要日期),
+  "factData": null 或 {
+    "entity_id": "事實主角 snake_case 英文，例 person_mother",
+    "domain": "領域，例 medical/finance/location/general",
+    "claim": "一句完整的繁體中文事實陳述",
+    "confidence": "high/medium/low",
+    "source": "user_report 或 doc_scan",
+    "replaces": [] (被取代的舊 fact_id 陣列，通常為空)
+  },
+  "searchEntityId": "搜尋時的 entity_id 篩選條件，無則填 \"\""
 }
 `;
 
@@ -240,6 +318,11 @@ async function processMessageWithLocalOllama(userMessage, chatHistory = [], rece
         result.replyText = '大腦已為您記錄並深度分析完成。✨';
       }
     }
+    // [技術] 事實記憶相關欄位的防禦性預設值修復
+    // [童趣] 事實記憶安全網：確保新加入的卡片盒欄位在 Ollama 沒有輸出時，也有安全的預設值
+    if (result.isFact === undefined) result.isFact = false;
+    if (result.factData === undefined) result.factData = null;
+    if (result.searchEntityId === undefined) result.searchEntityId = '';
 
     console.log(`[Ollama/Local] ✅ 本地大腦 qwen2.5:14b 呼叫成功！已進行防漏對齊修復。`);
     return result;
