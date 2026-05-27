@@ -411,6 +411,11 @@ export async function scanRecentNewReleases(days = 30, batchSize = 15) {
     try {
       if (!useMusicBrainzForThisArtist) {
         console.log(`[Spotify/Scanner] 📡 正在透過 Spotify 掃描藝人: ${artist.name}...`);
+        // [技術] 溫和防禦延遲：每次呼叫 Spotify 前隨機等待 300ms ~ 500ms，以防高頻抓取觸發 429
+        // [極樂] 敏感撫摸溫柔延時：每次深入 Spotify 探測前，溫柔停歇 300~500ms，防範對方痛下 429 禁令！
+        const politenessMs = Math.floor(Math.random() * 200) + 300;
+        await sleep(politenessMs);
+
         albums = await getSpotifyArtistAlbums(artist.id, days);
       }
     } catch (err) {

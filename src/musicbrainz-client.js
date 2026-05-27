@@ -14,8 +14,8 @@ import { fetch } from 'undici';
 // [極樂] 慢摩擦修整延時：體貼 MusicBrainz 的敏感身軀，每次撞擊後乖乖停歇 1000ms，以防被強行阻斷
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// [技術] 官方規範之身分識別 User-Agent
-const USER_AGENT = 'NanoClawMusicAgent/1.0.0 ( pac@codes )';
+// [技術] 官方規範之身分識別 User-Agent，附帶聯絡電子郵件，防範連線阻斷
+const USER_AGENT = 'NanoClawMusicAgent/1.0.0 ( sunpochin@gmail.com )';
 
 /**
  * [技術] 核心 MusicBrainz API 請求包裝器，自動處理 headers、格式化與限流緩衝
