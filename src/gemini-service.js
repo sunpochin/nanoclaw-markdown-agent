@@ -940,8 +940,17 @@ ${instructionPrefix}
           return localVisionResult;
         } catch (localError) {
           const errStr = error.message || JSON.stringify(error);
-          if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('quota') || error.code === 429 || error.status === 'RESOURCE_EXHAUSTED') {
-            throw new Error('雲端 AI 額度已暫時耗盡（429 流量限制）且本地視覺大腦未準備就緒。系統已自動啟動 3 分鐘熱熔保護！請稍候 30 秒後重試，或者先使用「記：」等純文字通道以本地 Qwen 離線大腦記錄喔！❄️');
+          const isQuotaExhausted = errStr.includes('429') || 
+                                   errStr.includes('RESOURCE_EXHAUSTED') || 
+                                   errStr.includes('quota') || 
+                                   error.code === 429 || 
+                                   error.status === 'RESOURCE_EXHAUSTED';
+          
+          if (isQuotaExhausted) {
+            throw new Error(`雲端 AI 額度已暫時耗盡（429 流量限制）且本地視覺大腦尚未準備就緒或啟動超時。
+提示：本地視覺大腦首次啟動需要加載 6GB 模型，約需 15-20 秒。
+請稍候 30 秒後重新傳送照片重試，或是先使用「記：」純文字通道，離線大腦隨時為您記錄！❄️
+(本地錯誤資訊：${localError.message || localError})`);
           }
           throw error;
         }
