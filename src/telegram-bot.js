@@ -438,6 +438,30 @@ ${processList}
     bot.sendChatAction(chatId, 'typing');
     const startTime = Date.now();
 
+    // [技術] 建立動態等待訊息，提供使用者思考中與進度百分比的 UI 體感
+    // [繁體中文註解] 建立動態等待訊息，讓主人看到小精靈正在努力讀信與翻箱倒櫃，還附帶進度條喔！
+    let loadingMsg;
+    let loadingInterval;
+    try {
+      loadingMsg = await bot.sendMessage(chatId, '🧠 正在喚醒大腦精靈... (0%)');
+      let progress = 0;
+      const dots = ['.', '..', '...'];
+      let dotIdx = 0;
+      loadingInterval = setInterval(() => {
+        if (progress < 90) {
+          progress += Math.floor(Math.random() * 15) + 5;
+          if (progress > 90) progress = 90;
+        }
+        dotIdx = (dotIdx + 1) % dots.length;
+        bot.editMessageText(`🧠 正在喚醒大腦精靈${dots[dotIdx]} (${progress}%)`, {
+          chat_id: chatId,
+          message_id: loadingMsg.message_id
+        }).catch(() => {}); // 忽視頻繁更新的 API 限流錯誤
+      }, 1200);
+    } catch (e) {
+      console.warn('[Telegram/Loading] ⚠️ 發送動態等待訊息失敗:', e.message);
+    }
+
     try {
       const chatHistory = getTelegramSession(chatId);
       const recentNotesContext = await readRecentNotesContext(7);
@@ -445,6 +469,21 @@ ${processList}
 
       // 智慧大腦意圖判定與分析
       const aiResult = await processMessageWithAI(text, chatHistory, recentNotesContext, isLocalMode);
+      
+      // [技術] 準備回覆前，將進度條拉至 100% 並清理定時器
+      // [繁體中文註解] 大腦精靈完成任務！把進度條拉滿到 100% 並關掉定時器小鬧鐘
+      if (loadingInterval) clearInterval(loadingInterval);
+      if (loadingMsg) {
+        await bot.editMessageText('🧠 思考完成！正在為您渲染回覆... (100%)', {
+          chat_id: chatId,
+          message_id: loadingMsg.message_id
+        }).catch(() => {});
+        // 稍微等待 300 毫秒讓使用者看見 100% 完成
+        await new Promise(r => setTimeout(r, 300));
+        // 刪除原本的等待訊息，避免版面雜亂
+        bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+      }
+
       const initialElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
       // A. 判定為記事並寫入
@@ -561,6 +600,8 @@ ${processList}
         return bot.sendMessage(chatId, decoratedText);
       });
     } catch (err) {
+      if (loadingInterval) clearInterval(loadingInterval);
+      if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
       console.error('[Telegram/Bot] 🧠 智慧通道處理發生錯誤:', err);
       return bot.sendMessage(chatId, `❌ 抱歉，處理智慧訊息時發生錯誤：${err.message || err}`);
     }
