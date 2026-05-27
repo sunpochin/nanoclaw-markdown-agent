@@ -352,6 +352,29 @@ ${processList}
 
       bot.sendChatAction(chatId, 'upload_photo');
       
+      let loadingMsg;
+      let loadingInterval;
+      try {
+        loadingMsg = await bot.sendMessage(chatId, '📷 正在接收並解密照片... (0%)');
+        let progress = 0;
+        const dots = ['.', '..', '...'];
+        let dotIdx = 0;
+        loadingInterval = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 15) + 5;
+            if (progress > 90) progress = 90;
+          }
+          dotIdx = (dotIdx + 1) % dots.length;
+          const statusText = progress < 30 ? '📷 正在載入照片資料' : (progress < 60 ? '🧠 大腦小精靈正在看照片' : '🔍 正在努力辨識照片中的字詞');
+          bot.editMessageText(`${statusText}${dots[dotIdx]} (${progress}%)`, {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+        }, 1200);
+      } catch (e) {
+        console.warn('[Telegram/Loading] ⚠️ 發送照片等待訊息失敗:', e.message);
+      }
+
       try {
         const fileLink = await bot.getFileLink(fileId);
         
@@ -366,6 +389,17 @@ ${processList}
         // 呼叫多模態 Gemini 解析，傳入自訂 Prompt
         const result = await processImageWithAI(imageBase64, mimeType, customPrompt);
         console.log(`[Telegram/Vision] ✅ 多模態圖片分析完成："${result.title}"`);
+
+        // 清除等待進度條
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) {
+          await bot.editMessageText('📷 照片解析完成！正在為您排版筆記... (100%)', {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 300));
+          bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+        }
 
         // [技術] 智慧過濾寫入：如果 ocrContent 是空的，或者是系統預設的失敗字串，則跳過 Obsidian 寫入以免垃圾累積
         // [繁體中文註解] 聰明挑選日記：如果大腦精靈沒有認出這張照片的字，那就不要隨便寫進我們的日記本裡，不留垃圾！
@@ -386,6 +420,8 @@ ${processList}
 
         return bot.sendMessage(chatId, result.replyText);
       } catch (err) {
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         console.error('[Telegram/Vision] ❌ 處理多模態影像發生錯誤:', err);
         return bot.sendMessage(chatId, `❌ 抱歉，解析照片或進行多模態處理時發生錯誤：${err.message || err}`);
       }
@@ -397,6 +433,29 @@ ${processList}
     if (msg.voice) {
       const fileId = msg.voice.file_id;
       bot.sendChatAction(chatId, 'record_voice');
+
+      let loadingMsg;
+      let loadingInterval;
+      try {
+        loadingMsg = await bot.sendMessage(chatId, '🎙️ 正在讀取您的語音訊息... (0%)');
+        let progress = 0;
+        const dots = ['.', '..', '...'];
+        let dotIdx = 0;
+        loadingInterval = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 15) + 5;
+            if (progress > 90) progress = 90;
+          }
+          dotIdx = (dotIdx + 1) % dots.length;
+          const statusText = progress < 35 ? '🎙️ 正在下載語音檔案' : (progress < 65 ? '👂 聽力小精靈正在認真聆聽' : '✍️ 正在把聲音翻譯成繁體中文');
+          bot.editMessageText(`${statusText}${dots[dotIdx]} (${progress}%)`, {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+        }, 1200);
+      } catch (e) {
+        console.warn('[Telegram/Loading] ⚠️ 發送語音等待訊息失敗:', e.message);
+      }
 
       try {
         const fileLink = await bot.getFileLink(fileId);
@@ -412,6 +471,17 @@ ${processList}
         const audioResult = await processAudioWithAI(audioBase64, mimeType);
         console.log(`[Telegram/Audio] ✅ 語音分析完成，聽寫：「${audioResult.transcription}」`);
 
+        // 清除等待進度條
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) {
+          await bot.editMessageText('🎙️ 語音聽寫完成！正在為您記錄... (100%)', {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 300));
+          bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+        }
+
         // 若判定為記事，寫入 Obsidian 每日筆記中
         if (audioResult.isNote && audioResult.noteContent) {
           await writeNoteToMarkdown(audioResult.noteContent);
@@ -419,6 +489,8 @@ ${processList}
 
         return bot.sendMessage(chatId, audioResult.replyText);
       } catch (err) {
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         console.error('[Telegram/Audio] ❌ 處理語音聽寫發生錯誤:', err);
         return bot.sendMessage(chatId, `❌ 抱歉，轉譯語音訊息時發生錯誤：${err.message || err}`);
       }
