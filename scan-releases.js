@@ -10,7 +10,7 @@
  */
 import { scanRecentNewReleases } from './src/spotify-client.js';
 import { generateAlbumReview } from './src/album-reviewer.js';
-import { publishToGitBook } from './src/gitbook-publisher.js';
+import { publishToGitBook, gitPushChanges } from './src/gitbook-publisher.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -43,8 +43,8 @@ async function main() {
         // A. 呼叫 AI 生成深度樂評
         const reviewMarkdown = await generateAlbumReview(album);
         
-        // B. 發布至 GitBook 並自動執行 GitOps 推送
-        const publishResult = await publishToGitBook(album, reviewMarkdown);
+        // B. 發布至 GitBook 並自動執行 GitOps 推送 (啟用批次優化，避免迴圈內重複高頻推送)
+        const publishResult = await publishToGitBook(album, reviewMarkdown, true);
         
         if (publishResult.success) {
           console.log(`✅ 成功同步樂評《${title}》至 GitBook！`);
@@ -53,6 +53,13 @@ async function main() {
       } catch (err) {
         console.error(`❌ 處理樂評《${title}》時發生異常:`, err.message || err);
       }
+    }
+
+    // 批次處理結束後，若有成功產出，執行單次 GitOps 批次推送，避免迴圈內重複高頻推送 Git
+    if (successCount > 0) {
+      console.log(`\n📡 正在將本批次 ${successCount} 首新發行樂評批次推送至 GitHub 並同步 GitBook...`);
+      const commitMsg = `docs(music): batch add ${successCount} new AI reviews via CLI`;
+      await gitPushChanges(commitMsg);
     }
 
     console.log(`\n─────────────────────────────────────────────`);
