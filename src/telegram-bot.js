@@ -401,21 +401,21 @@ ${processList}
           bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         }
 
-        // [技術] 智慧過濾寫入：如果 ocrContent 是空的，或者是系統預設的失敗字串，則跳過 Obsidian 寫入以免垃圾累積
-        // [繁體中文註解] 聰明挑選日記：如果大腦精靈沒有認出這張照片的字，那就不要隨便寫進我們的日記本裡，不留垃圾！
-        const isFallback = !result.ocrContent || 
-                           result.ocrContent.includes('未能提取') || 
-                           result.ocrContent === '（未能提取出文字）';
+        // [技術] 智慧過濾寫入：如果 ocrContent 是空的，則跳過 Obsidian 寫入與回覆渲染，避免垃圾堆積
+        // [繁體中文註解] 聰明挑選日記：如果大腦精靈覺得這只是一般風景照/生活照，那就不要隨便寫進我們的日記本裡！
+        const hasOcr = result.ocrContent && result.ocrContent.trim() !== '';
                            
-        if (!isFallback) {
+        if (hasOcr) {
           const noteContent = `### 📷 ${result.title}\n${customPrompt ? `* **指示任務**：${customPrompt}\n` : ''}${result.ocrContent}`;
           await writeNoteToMarkdown(noteContent);
         } else {
-          console.log(`[Telegram/Vision] ⚠️ 本次影像分析未提取出有效文字（Fallback 狀態），跳過寫入 Obsidian。`);
+          console.log(`[Telegram/Vision] ⚠️ 本次影像分析未提取出有效文字（無文字或生活照），跳過寫入 Obsidian。`);
         }
 
-        // 記錄進對話歷史 Session
-        const finalMessage = `${result.replyText}\n\n──────────────────\n\n📝 **【儲存的筆記內容】**\n${result.ocrContent}`;
+        // 根據是否有辨識內容，動態組合回覆文字，若無則不顯示筆記區塊
+        const finalMessage = hasOcr 
+          ? `${result.replyText}\n\n──────────────────\n\n📝 **【儲存的筆記內容】**\n${result.ocrContent}`
+          : result.replyText;
         
         appendToTelegramSession(chatId, 'user', `[圖片訊息] ${customPrompt}`);
         appendToTelegramSession(chatId, 'model', finalMessage);

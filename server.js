@@ -295,12 +295,19 @@ async function handleLineEvent(event) {
       const ocrResult = await processImageWithAI(imageBase64, mimeType);
       console.log(`[LINE/Webhook] 📸 影像 OCR 分析完成: "${ocrResult.title}"`);
 
-      // 4. 將排版好的 Markdown 內容寫入本地筆記
-      const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
-      await writeNoteToMarkdown(noteContent);
+      // 4. 將排版好的 Markdown 內容寫入本地筆記 (只有有辨識出文字時才寫入，防範生活照雜訊)
+      const hasOcr = ocrResult.ocrContent && ocrResult.ocrContent.trim() !== '';
+      if (hasOcr) {
+        const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
+        await writeNoteToMarkdown(noteContent);
+      } else {
+        console.log(`[LINE/Webhook] ⚠️ 本次影像分析未提取出有效文字（無文字或生活照），跳過寫入 Obsidian。`);
+      }
 
       // 5. 回覆使用者解析結果
-      const finalMessage = `${ocrResult.replyText}\n\n──────────────────\n\n📝【儲存的筆記內容】\n${ocrResult.ocrContent}`;
+      const finalMessage = hasOcr
+        ? `${ocrResult.replyText}\n\n──────────────────\n\n📝【儲存的筆記內容】\n${ocrResult.ocrContent}`
+        : ocrResult.replyText;
       return lineClient.replyMessage({
         replyToken,
         messages: [{
