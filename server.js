@@ -12,6 +12,9 @@ import { middleware, messagingApi } from '@line/bot-sdk';
 import dotenv from 'dotenv';
 import { ensureVaultDirExists, writeNoteToMarkdown, readNotesForDay, listAllNotes, searchNotesInVault, writeSimulationReportToMarkdown, readRecentNotesContext } from './src/markdown-service.js';
 import { processMessageWithAI, processImageWithAI, processAudioWithAI, analyzeSearchWithAI, simulateButterflyEffectWithAI } from './src/gemini-service.js';
+// [技術] 引入雙腦事實記憶庫模組
+// [童趣] 開啟左腦右腦雙腦圖書館的大門：把魔法索引卡片盒的管理員喚醒！
+import { syncObsidianToDatabase, insertFact, searchFacts, getDatabaseStats } from './src/memory-database.js';
 import { execFile } from 'child_process';
 import os from 'os';
 // 引入 Telegram Bot 初始化模組
@@ -292,16 +295,24 @@ async function handleLineEvent(event) {
       const ocrResult = await processImageWithAI(imageBase64, mimeType);
       console.log(`[LINE/Webhook] 📸 影像 OCR 分析完成: "${ocrResult.title}"`);
 
-      // 4. 將排版好的 Markdown 內容寫入本地筆記
-      const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
-      await writeNoteToMarkdown(noteContent);
+      // 4. 將排版好的 Markdown 內容寫入本地筆記 (只有有辨識出文字時才寫入，防範生活照雜訊)
+      const hasOcr = ocrResult.ocrContent && ocrResult.ocrContent.trim() !== '';
+      if (hasOcr) {
+        const noteContent = `### 📷 ${ocrResult.title}\n${ocrResult.ocrContent}`;
+        await writeNoteToMarkdown(noteContent);
+      } else {
+        console.log(`[LINE/Webhook] ⚠️ 本次影像分析未提取出有效文字（無文字或生活照），跳過寫入 Obsidian。`);
+      }
 
       // 5. 回覆使用者解析結果
+      const finalMessage = hasOcr
+        ? `${ocrResult.replyText}\n\n──────────────────\n\n📝【儲存的筆記內容】\n${ocrResult.ocrContent}`
+        : ocrResult.replyText;
       return lineClient.replyMessage({
         replyToken,
         messages: [{
           type: 'text',
-          text: ocrResult.replyText
+          text: finalMessage
         }]
       });
     } catch (error) {
@@ -643,10 +654,56 @@ ${processList}
       });
     }
 
+    // [技術] 若 AI 偵測到長期客觀事實，在背景非同步寫入雙腦事實記憶庫（不阻塞主回覆流程）
+    // [童趣] 如果小精靈發現使用者說了值得永久記住的事情（不是隨手記，而是真正的事實糖果），
+    //        就偷偷在背後把它放進魔法卡片盒裡，不打擾正常的對話流程！
+    if (aiResult.isFact && aiResult.factData && aiResult.factData.claim) {
+      console.log(`[LINE/Webhook] 🧠 偵測到長期事實，寫入雙腦事實記憶庫：${aiResult.factData.claim}`);
+      insertFact(aiResult.factData).then(result => {
+        console.log(`[MemoryDB] ✅ 事實已寫入：${result.factId} → ${result.filePath}`);
+      }).catch(err => {
+        console.error('[MemoryDB] ❌ 事實寫入失敗（不影響主回覆）:', err.message || err);
+      });
+    }
+
     // 如果 Gemini 智慧分類判定為搜尋歷史，且具有搜尋關鍵字 (啟動二階段深度大腦分析推理 RAG)
     if (aiResult.isSearch && aiResult.searchQuery) {
-      console.log(`[LINE/Webhook] 🔍 智慧搜尋啟動：搜尋關鍵字 "${aiResult.searchQuery}"`);
-      const searchResults = await searchNotesInVault(aiResult.searchQuery);
+      console.log(`[LINE/Webhook] 🔍 智慧搜尋啟動：搜尋關鍵字 "${aiResult.searchQuery}"，entity_id: "${aiResult.searchEntityId || '全局'}"`);
+
+      // [技術] 優先使用 SQLite 高速事實搜尋，若無結果才 fallback 到 Markdown 全文掃描
+      // [童趣] 先去超快的魔法卡片盒找找看；如果卡片盒裡找不到，再去翻故事書的每一頁
+      let searchResults = [];
+      let searchMode = 'sqlite';
+
+      try {
+        const factResults = searchFacts(
+          aiResult.searchQuery,
+          aiResult.searchEntityId || null,
+          'current'
+        );
+
+        if (factResults.length > 0) {
+          // [技術] SQLite 結果轉換為 analyzeSearchWithAI 相容格式
+          // [童趣] 把卡片盒找到的卡片翻譯成故事書的格式，讓大腦可以一起看
+          searchResults = factResults.map(f => ({
+            date: f.date,
+            matches: [`[${f.entity_id}/${f.domain}] ${f.claim} (${f.confidence} 可信度, ${f.status})`]
+          }));
+          console.log(`[LINE/Webhook] 🃏 SQLite 快速命中 ${factResults.length} 筆事實`);
+        } else {
+          // [技術] SQLite 無結果，fallback 到 Markdown 全文搜尋
+          // [童趣] 卡片盒沒找到，改去翻故事書，仔細找找每一頁
+          searchMode = 'markdown_fallback';
+          searchResults = await searchNotesInVault(aiResult.searchQuery);
+          console.log(`[LINE/Webhook] 📖 SQLite 無命中，Markdown 全文搜尋找到 ${searchResults.length} 筆`);
+        }
+      } catch (err) {
+        // [技術] SQLite 搜尋失敗時，安全降級至 Markdown 搜尋
+        // [童趣] 卡片盒暫時壞掉了，緊急改用故事書搜尋，完全不影響使用者體驗
+        console.warn('[MemoryDB] ⚠️ SQLite 搜尋失敗，降級到 Markdown 搜尋:', err.message);
+        searchMode = 'markdown_fallback';
+        searchResults = await searchNotesInVault(aiResult.searchQuery);
+      }
 
       if (searchResults.length === 0) {
         const noResultText = `📋 幫您搜尋了本地 Obsidian 筆記中關於「${aiResult.searchQuery}」的記錄...\n\n目前找不到任何相關的歷史紀錄喔！📝`;
@@ -659,7 +716,7 @@ ${processList}
         });
       }
 
-      console.log(`[LINE/Webhook] 🧠 觸發二階段大腦深度推理分析...，本地模式: ${isLocalMode}`);
+      console.log(`[LINE/Webhook] 🧠 觸發二階段大腦深度推理分析...，本地模式: ${isLocalMode}，搜尋模式: ${searchMode}`);
       // [技術] 呼叫 analyzeSearchWithAI，傳入搜尋結果、對話歷史與近期日記進行深度語意關聯，附帶本地模式狀態
       // [童趣] 將搜出的舊日記、對話餘溫與最近背景送入 analyzeSearchWithAI 進行大腦深度聯想，搭配安全本地模式
       const analysisResult = await analyzeSearchWithAI(userMessage, chatHistory, recentNotesContext, searchResults, isLocalMode);
@@ -668,7 +725,7 @@ ${processList}
       const thinkingHeader = formatThinkingBlock({
         isLocal: isLocalMode,
         elapsedSec: totalElapsedSec,
-        intent: '🔎 歷史深度語意分析 (RAG)',
+        intent: `🔎 歷史深度語意分析 (RAG/${searchMode})`,
         contextCharCount: recentNotesContext.length,
         searchMatchesCount: searchResults.length,
         searchKeyword: aiResult.searchQuery,
@@ -781,6 +838,20 @@ app.listen(PORT, () => {
   } catch (err) {
     console.error('[Telegram/Bot] ❌ 啟動 Telegram Bot 失敗:', err.message || err);
   }
+
+  // [技術] 啟動雙腦同步協議：掃描 Obsidian Vault，對齊 SQLite 索引
+  // [童趣] 開館前對齊儀式：圖書館開門前，小館員把兩邊書架的卡片全部核對一遍，確保整整齊齊不遺漏！
+  syncObsidianToDatabase()
+    .then(stats => {
+      console.log(`[MemoryDB] 🧠 雙腦同步完成 — 新增:${stats.added} 更新:${stats.updated} 刪除:${stats.deleted}`);
+      const dbStats = getDatabaseStats();
+      console.log(`[MemoryDB] 📊 卡片盒狀態 — 共 ${dbStats.total} 筆事實（現行:${dbStats.current} 已過期:${dbStats.outdated}）`);
+    })
+    .catch(err => {
+      // [技術] 同步失敗不影響主服務運作，僅記錄警告
+      // [童趣] 對齊儀式失敗了也沒關係，圖書館照常開門，等下次重啟再試一次
+      console.warn('[MemoryDB] ⚠️ 雙腦同步失敗（不影響主服務）:', err.message || err);
+    });
 });
 
 // ==========================================

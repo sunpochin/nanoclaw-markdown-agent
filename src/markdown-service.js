@@ -10,6 +10,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
+import { acquireLock } from './file-lock.js';
 
 // [技術] 載入環境變數配置
 // [童趣] 魔法配方載入：把神奇的魔法粉末（環境變數）放進魔法小卡片儲藏箱裡！
@@ -83,6 +84,9 @@ export async function writeNoteToMarkdown(content) {
   // [童趣] 裝飾魔法花邊：用小星星符號把我們排版好的小日記打扮得漂漂亮亮！
   const formattedContent = `\n## [${timeStr}] 📝 隨手記\n*   ${indentedContent}\n\n---\n`;
   
+  // [技術] 引入檔案鎖確保並行追加的原子性與檔案安全
+  // [童趣] 寫日記前，要拿著小鎖排隊進去寫喔，這樣才不會撞在一起打架！
+  const release = await acquireLock(filePath);
   try {
     // [技術] 使用 append 模式追加內容，若檔案不存在則自動建立新檔
     // [童趣] 寫在最後面：把新的字體黏在筆記本的尾巴上，如果是本全新的書，會自動生出嶄新精美封面！
@@ -91,6 +95,8 @@ export async function writeNoteToMarkdown(content) {
   } catch (error) {
     console.error(`[Markdown/Vault] 寫入筆記發生錯誤:`, error);
     throw error;
+  } finally {
+    release();
   }
 }
 
@@ -231,12 +237,17 @@ export async function writeSimulationReportToMarkdown(scenario, reportContent) {
   
   const formattedContent = `\n## [${timeStr}] 🦋 蝴蝶效應未來模擬：${scenario}\n${reportContent}\n\n---\n`;
   
+  // [技術] 引入檔案鎖確保並行追加的原子性與檔案安全
+  // [童趣] 蝴蝶日記變身前，也要乖乖排隊拿小鎖才可以動手喔！
+  const release = await acquireLock(filePath);
   try {
     await fs.appendFile(filePath, formattedContent, 'utf8');
     return { success: true, filePath, timestamp: `${dateStr} ${timeStr}` };
   } catch (error) {
     console.error(`[Markdown/Vault] 寫入模擬報告發生錯誤:`, error);
     throw error;
+  } finally {
+    release();
   }
 }
 

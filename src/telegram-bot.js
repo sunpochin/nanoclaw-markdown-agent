@@ -352,6 +352,29 @@ ${processList}
 
       bot.sendChatAction(chatId, 'upload_photo');
       
+      let loadingMsg;
+      let loadingInterval;
+      try {
+        loadingMsg = await bot.sendMessage(chatId, '📷 正在接收並解密照片... (0%)');
+        let progress = 0;
+        const dots = ['.', '..', '...'];
+        let dotIdx = 0;
+        loadingInterval = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 15) + 5;
+            if (progress > 90) progress = 90;
+          }
+          dotIdx = (dotIdx + 1) % dots.length;
+          const statusText = progress < 30 ? '📷 正在載入照片資料' : (progress < 60 ? '🧠 大腦小精靈正在看照片' : '🔍 正在努力辨識照片中的字詞');
+          bot.editMessageText(`${statusText}${dots[dotIdx]} (${progress}%)`, {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+        }, 1200);
+      } catch (e) {
+        console.warn('[Telegram/Loading] ⚠️ 發送照片等待訊息失敗:', e.message);
+      }
+
       try {
         const fileLink = await bot.getFileLink(fileId);
         
@@ -367,16 +390,43 @@ ${processList}
         const result = await processImageWithAI(imageBase64, mimeType, customPrompt);
         console.log(`[Telegram/Vision] ✅ 多模態圖片分析完成："${result.title}"`);
 
-        // 將分析結果寫入 Obsidian 每日隨手記
-        const noteContent = `### 📷 ${result.title}\n${customPrompt ? `* **指示任務**：${customPrompt}\n` : ''}${result.ocrContent}`;
-        await writeNoteToMarkdown(noteContent);
+        // 清除等待進度條
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) {
+          await bot.editMessageText('📷 照片解析完成！正在為您排版筆記... (100%)', {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 300));
+          bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+        }
 
-        // 記錄進對話歷史 Session
+        // [技術] 智慧過濾寫入：如果 ocrContent 是空的，則跳過 Obsidian 寫入與回覆渲染，避免垃圾堆積
+        // [繁體中文註解] 聰明挑選日記：如果大腦精靈覺得這只是一般風景照/生活照，那就不要隨便寫進我們的日記本裡！
+        const hasOcr = result.ocrContent && result.ocrContent.trim() !== '';
+                           
+        if (hasOcr) {
+          const noteContent = `### 📷 ${result.title}\n${customPrompt ? `* **指示任務**：${customPrompt}\n` : ''}${result.ocrContent}`;
+          await writeNoteToMarkdown(noteContent);
+        } else {
+          console.log(`[Telegram/Vision] ⚠️ 本次影像分析未提取出有效文字（無文字或生活照），跳過寫入 Obsidian。`);
+        }
+
+        // 根據是否有辨識內容，動態組合回覆文字，若無則不顯示筆記區塊
+        const finalMessage = hasOcr 
+          ? `${result.replyText}\n\n──────────────────\n\n📝 **【儲存的筆記內容】**\n${result.ocrContent}`
+          : result.replyText;
+        
         appendToTelegramSession(chatId, 'user', `[圖片訊息] ${customPrompt}`);
-        appendToTelegramSession(chatId, 'model', result.replyText);
+        appendToTelegramSession(chatId, 'model', finalMessage);
 
-        return bot.sendMessage(chatId, result.replyText);
+        return bot.sendMessage(chatId, finalMessage, { parse_mode: 'Markdown' }).catch((err) => {
+          console.warn('[Telegram/Vision] ⚠️ Markdown 解析失敗，降級為純文字發送:', err.message || err);
+          return bot.sendMessage(chatId, finalMessage);
+        });
       } catch (err) {
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         console.error('[Telegram/Vision] ❌ 處理多模態影像發生錯誤:', err);
         return bot.sendMessage(chatId, `❌ 抱歉，解析照片或進行多模態處理時發生錯誤：${err.message || err}`);
       }
@@ -388,6 +438,29 @@ ${processList}
     if (msg.voice) {
       const fileId = msg.voice.file_id;
       bot.sendChatAction(chatId, 'record_voice');
+
+      let loadingMsg;
+      let loadingInterval;
+      try {
+        loadingMsg = await bot.sendMessage(chatId, '🎙️ 正在讀取您的語音訊息... (0%)');
+        let progress = 0;
+        const dots = ['.', '..', '...'];
+        let dotIdx = 0;
+        loadingInterval = setInterval(() => {
+          if (progress < 90) {
+            progress += Math.floor(Math.random() * 15) + 5;
+            if (progress > 90) progress = 90;
+          }
+          dotIdx = (dotIdx + 1) % dots.length;
+          const statusText = progress < 35 ? '🎙️ 正在下載語音檔案' : (progress < 65 ? '👂 聽力小精靈正在認真聆聽' : '✍️ 正在把聲音翻譯成繁體中文');
+          bot.editMessageText(`${statusText}${dots[dotIdx]} (${progress}%)`, {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+        }, 1200);
+      } catch (e) {
+        console.warn('[Telegram/Loading] ⚠️ 發送語音等待訊息失敗:', e.message);
+      }
 
       try {
         const fileLink = await bot.getFileLink(fileId);
@@ -403,6 +476,17 @@ ${processList}
         const audioResult = await processAudioWithAI(audioBase64, mimeType);
         console.log(`[Telegram/Audio] ✅ 語音分析完成，聽寫：「${audioResult.transcription}」`);
 
+        // 清除等待進度條
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) {
+          await bot.editMessageText('🎙️ 語音聽寫完成！正在為您記錄... (100%)', {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id
+          }).catch(() => {});
+          await new Promise(r => setTimeout(r, 300));
+          bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+        }
+
         // 若判定為記事，寫入 Obsidian 每日筆記中
         if (audioResult.isNote && audioResult.noteContent) {
           await writeNoteToMarkdown(audioResult.noteContent);
@@ -410,6 +494,8 @@ ${processList}
 
         return bot.sendMessage(chatId, audioResult.replyText);
       } catch (err) {
+        if (loadingInterval) clearInterval(loadingInterval);
+        if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
         console.error('[Telegram/Audio] ❌ 處理語音聽寫發生錯誤:', err);
         return bot.sendMessage(chatId, `❌ 抱歉，轉譯語音訊息時發生錯誤：${err.message || err}`);
       }
@@ -438,6 +524,30 @@ ${processList}
     bot.sendChatAction(chatId, 'typing');
     const startTime = Date.now();
 
+    // [技術] 建立動態等待訊息，提供使用者思考中與進度百分比的 UI 體感
+    // [繁體中文註解] 建立動態等待訊息，讓主人看到小精靈正在努力讀信與翻箱倒櫃，還附帶進度條喔！
+    let loadingMsg;
+    let loadingInterval;
+    try {
+      loadingMsg = await bot.sendMessage(chatId, '🧠 正在喚醒大腦精靈... (0%)');
+      let progress = 0;
+      const dots = ['.', '..', '...'];
+      let dotIdx = 0;
+      loadingInterval = setInterval(() => {
+        if (progress < 90) {
+          progress += Math.floor(Math.random() * 15) + 5;
+          if (progress > 90) progress = 90;
+        }
+        dotIdx = (dotIdx + 1) % dots.length;
+        bot.editMessageText(`🧠 正在喚醒大腦精靈${dots[dotIdx]} (${progress}%)`, {
+          chat_id: chatId,
+          message_id: loadingMsg.message_id
+        }).catch(() => {}); // 忽視頻繁更新的 API 限流錯誤
+      }, 1200);
+    } catch (e) {
+      console.warn('[Telegram/Loading] ⚠️ 發送動態等待訊息失敗:', e.message);
+    }
+
     try {
       const chatHistory = getTelegramSession(chatId);
       const recentNotesContext = await readRecentNotesContext(7);
@@ -445,6 +555,21 @@ ${processList}
 
       // 智慧大腦意圖判定與分析
       const aiResult = await processMessageWithAI(text, chatHistory, recentNotesContext, isLocalMode);
+      
+      // [技術] 準備回覆前，將進度條拉至 100% 並清理定時器
+      // [繁體中文註解] 大腦精靈完成任務！把進度條拉滿到 100% 並關掉定時器小鬧鐘
+      if (loadingInterval) clearInterval(loadingInterval);
+      if (loadingMsg) {
+        await bot.editMessageText('🧠 思考完成！正在為您渲染回覆... (100%)', {
+          chat_id: chatId,
+          message_id: loadingMsg.message_id
+        }).catch(() => {});
+        // 稍微等待 300 毫秒讓使用者看見 100% 完成
+        await new Promise(r => setTimeout(r, 300));
+        // 刪除原本的等待訊息，避免版面雜亂
+        bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
+      }
+
       const initialElapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
 
       // A. 判定為記事並寫入
@@ -561,6 +686,8 @@ ${processList}
         return bot.sendMessage(chatId, decoratedText);
       });
     } catch (err) {
+      if (loadingInterval) clearInterval(loadingInterval);
+      if (loadingMsg) bot.deleteMessage(chatId, loadingMsg.message_id).catch(() => {});
       console.error('[Telegram/Bot] 🧠 智慧通道處理發生錯誤:', err);
       return bot.sendMessage(chatId, `❌ 抱歉，處理智慧訊息時發生錯誤：${err.message || err}`);
     }
