@@ -17,8 +17,13 @@ import {
   insertFact,
   searchFacts,
   syncObsidianToDatabase,
-  getDatabaseStats
+  getDatabaseStats,
+  markFactsOutdated
 } from './src/memory-database.js';
+import fs from 'fs/promises';
+import path from 'path';
+
+const VAULT_DIR = path.resolve(process.cwd(), process.env.OBSIDIAN_VAULT_PATH || './nanoclaw_notes');
 
 // [童趣] 測試報告封面：宣告我們要開始進行哪些魔法測試
 console.log('\n==========================================================');
@@ -192,6 +197,65 @@ try {
   console.log(`  同步結果：新增 ${syncResult.added}，更新 ${syncResult.updated}，刪除 ${syncResult.deleted}\n`);
 } catch (err) {
   console.log(`  ❌ syncObsidianToDatabase 測試失敗: ${err.message}`);
+  failed++;
+}
+
+// ======================================
+// 測試 9: 並行寫入檔案鎖 (Concurrency file-lock safety)
+// ======================================
+console.log('【測試 9】並行寫入與檔案鎖安全性驗證');
+try {
+  // 對同一個實體檔案（比如 mother）並行發起 5 次寫入，驗證檔案鎖使它們乖乖排隊、不會交錯損毀
+  const writes = Array.from({ length: 5 }).map((_, i) => 
+    insertFact({
+      entity_id: 'person_mother',
+      domain: 'medical',
+      claim: `並行測試事實 #${i}：確認檔案鎖排隊正常。`,
+      source: 'user_report',
+      confidence: 'high'
+    })
+  );
+
+  const writeResults = await Promise.all(writes);
+  assert(writeResults.length === 5, '5 次並行寫入皆成功完成');
+  
+  // 讀取寫入的檔案，檢查格式是否完美無缺（無巢狀或損毀）
+  const motherFilePath = path.join(VAULT_DIR, writeResults[0].filePath);
+  const motherContent = await fs.readFile(motherFilePath, 'utf8');
+  
+  const matches = motherContent.match(/<!-- fact_start id="fact_/g) || [];
+  assert(matches.length >= 5, '檔案中包含所有寫入的 fact 區塊');
+  
+  // 檢查是否有損毀的巢狀區塊（例如一個 block 裡包含多個 fact_start）
+  const parsedFacts = parseFacts(writeResults[0].filePath, motherContent);
+  const matchedParsed = parsedFacts.filter(f => f.claim && f.claim.includes('並行測試事實'));
+  assert(matchedParsed.length === 5, '5 個並行寫入的事實全部能被 Regex 完美解析（代表格式完全無交錯損毀）！');
+  console.log();
+
+} catch (err) {
+  console.log(`  ❌ 並行寫入測試失敗: ${err.message}`);
+  failed++;
+}
+
+// ======================================
+// 測試 10: markFactsOutdated 狀態更新與取代驗證
+// ======================================
+console.log('【測試 10】markFactsOutdated 狀態更新驗證');
+try {
+  const dbRows = db.prepare("SELECT id FROM facts WHERE entity_id = 'person_mother' AND status = 'current'").all();
+  if (dbRows.length > 0) {
+    const targetId = dbRows[0].id;
+    await markFactsOutdated([targetId]);
+    
+    // 驗證 SQLite 狀態更新為 outdated
+    const updatedRow = db.prepare('SELECT status FROM facts WHERE id = ?').get(targetId);
+    assert(updatedRow?.status === 'outdated', 'SQLite 中的狀態成功更新為 outdated');
+  } else {
+    assert(false, '沒有找到可供取代的測試 facts');
+  }
+  console.log();
+} catch (err) {
+  console.log(`  ❌ markFactsOutdated 測試失敗: ${err.message}`);
   failed++;
 }
 
